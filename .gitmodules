@@ -1,3 +1,4 @@
 [submodule "examples/DearCyFi_Demo"]
 	path = examples/DearCyFi_Demo
 	url = https://github.com/khazaddim/DearCyFi_Demo.git
+	branch = Test-DCG-Mod
