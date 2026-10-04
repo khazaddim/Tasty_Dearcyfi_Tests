@@ -9,6 +9,44 @@ This is a plan only: the script names below are proposed, not implemented yet.
 The initial goal is command-line examples; DearCyGui/DearCyFi integration can
 build on these later without being required to run them.
 
+## Verified baseline
+
+The baseline was verified on 2026-10-04 with CPython **3.14.8 free-threading**
+(`3.14t`, `sys._is_gil_enabled() == False`) and `tastytrade==13.2.3`.
+Version 13.2.3 exposes the asynchronous OAuth SDK surface used by this roadmap:
+`Session`, `Account`, market-data functions, `DXLinkStreamer`, DXFeed events,
+instruments, and orders.
+
+The exact resolved dependency set is committed in
+[`requirements-3.14t.lock`](./requirements-3.14t.lock), generated from
+[`requirements.in`](./requirements.in). From the repository root, install or
+reconcile the baseline with:
+
+```powershell
+uv pip install --python .\.venv\Scripts\python.exe -r .\Tastyware_Demo_Scripts\requirements-3.14t.lock
+```
+
+Verify the credential-free compatibility smoke test without opening a session
+or making a network request:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest -v Tastyware_Demo_Scripts.test_compatibility_imports
+```
+
+The smoke test imports only SDK modules; it does not construct `Session`,
+provide credentials, or call any account, market-data, streamer, instrument,
+or order API.
+
+### Baseline verification
+
+On the tested 3.14t interpreter, the lock installed successfully and the
+credential-free import smoke test passed for the complete demo SDK surface.
+`compileall` also passed for this directory. No unsupported dependency,
+import failure, or free-threading-specific behavior was observed. This
+repository has no existing Python lint, type-check, or test-runner
+configuration; the standard-library `unittest` command above is the baseline
+credential-free test command.
+
 ## Sources and version expectations
 
 The roadmap is based on the upstream README and documentation reviewed on

@@ -1,11 +1,11 @@
 ## 1. Establish the verified demo baseline
 
-- [ ] 1.1 Inspect the current repository Python tooling and identify the exact candidate `tastytrade` SDK version/range that uses asynchronous OAuth.
-- [ ] 1.2 Create or select the project's Python 3.14 free-threaded (`3.14t`) environment and verify that the selected interpreter is the free-threaded build.
-- [ ] 1.3 Add the minimal candidate dependency declaration, install the exact SDK and its full dependency set into the Python 3.14t environment, and preserve the resolved versions needed to reproduce the result.
-- [ ] 1.4 Add and run a credential-free compatibility smoke test that imports `tastytrade` and every module used by the proposed session, account, market-data, DXLink, instrument, and order demos; confirm it opens no session and makes no network request.
-- [ ] 1.5 Run the repository's available credential-free static checks and test command under Python 3.14t; record any unsupported dependency, import failure, or interpreter-specific behavior.
-- [ ] 1.6 Select and document Python 3.14t plus the exact tested SDK baseline in `Tastyware_Demo_Scripts/README.md` only after tasks 1.2 through 1.5 pass; otherwise document the failure and select a verified standard CPython fallback before implementing demos.
+- [x] 1.1 Inspect the current repository Python tooling and identify the exact candidate `tastytrade` SDK version/range that uses asynchronous OAuth.
+- [x] 1.2 Create or select the project's Python 3.14 free-threaded (`3.14t`) environment and verify that the selected interpreter is the free-threaded build.
+- [x] 1.3 Add the minimal candidate dependency declaration, install the exact SDK and its full dependency set into the Python 3.14t environment, and preserve the resolved versions needed to reproduce the result.
+- [x] 1.4 Add and run a credential-free compatibility smoke test that imports `tastytrade` and every module used by the proposed session, account, market-data, DXLink, instrument, and order demos; confirm it opens no session and makes no network request.
+- [x] 1.5 Run the repository's available credential-free static checks and test command under Python 3.14t; record any unsupported dependency, import failure, or interpreter-specific behavior.
+- [x] 1.6 Select and document Python 3.14t plus the exact tested SDK baseline in `Tastyware_Demo_Scripts/README.md` only after tasks 1.2 through 1.5 pass; otherwise document the failure and select a verified standard CPython fallback before implementing demos.
 - [ ] 1.7 Define the `TASTYTRADE_CLIENT_SECRET`, `TASTYTRADE_REFRESH_TOKEN`, environment-selection, account-selection, timeout, and output-directory conventions in the README.
 - [ ] 1.8 Add Git ignore coverage for the local demo export directory and verify no credential, token, account-data, or generated export path can be committed.
 
