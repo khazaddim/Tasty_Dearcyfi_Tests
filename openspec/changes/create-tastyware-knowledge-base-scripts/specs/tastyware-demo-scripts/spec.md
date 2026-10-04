@@ -40,6 +40,20 @@ The market-data demos SHALL separate snapshot, quote-streaming, candle-history, 
 - **WHEN** a user requests candles for a bounded date range
 - **THEN** the demo outputs timezone-preserving, sorted, deduplicated rows within that range and discloses whether the result is partial
 
+#### Scenario: Initial candle endpoint finish signal
+- **WHEN** the candle helper receives a candle for both endpoint sessions selected using the instrument's exchange/product calendar, adjusting a closed-market start date forward to the next session and today (or an explicit end date) backward to the latest session opened by both the end time and current time
+- **THEN** it stops collection, cleans up streaming resources, and reports the endpoint dates and endpoint coverage while retaining the partial-data label unless a tested SDK signal proves completeness
+- **AND** it does not require internal-gap recovery to satisfy this initial finish signal
+
+#### Scenario: Selecting calendar-adjusted candle endpoints
+- **WHEN** a requested endpoint falls on a weekend, exchange holiday, or before the end session has opened
+- **THEN** the helper uses `pandas_market_calendars` to select eligible endpoint sessions without widening the requested range, preserves intraday bounds, and reports the calendar and adjusted endpoint dates
+- **AND** an unknown calendar or a range with no eligible session produces an actionable error rather than a silent weekday fallback
+
+#### Scenario: Candle endpoint is unavailable
+- **WHEN** either endpoint remains unobserved
+- **THEN** the helper respects its finite attempt and time budgets and reports the missing endpoint and partial result rather than silently declaring endpoint coverage
+
 #### Scenario: Missing market-data fields
 - **WHEN** a market-data response omits a quote field or returns stale data
 - **THEN** the demo identifies the value as unavailable or stale rather than presenting it as a current value

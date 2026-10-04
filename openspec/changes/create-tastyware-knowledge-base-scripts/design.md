@@ -22,6 +22,13 @@ The scripts handle sensitive financial-account context. They must be useful for 
 
 ## Decisions
 
+### Use the verified CPython 3.14t and tastytrade baseline
+
+The initial supported and tested baseline is CPython 3.14.8 free-threaded
+(`3.14t`, with `sys._is_gil_enabled() == False`) and `tastytrade==13.2.3`.
+The reproducible dependency set is pinned in
+`Tastyware_Demo_Scripts/requirements-3.14t.lock`.
+
 ### Use numbered standalone async entry points backed by minimal shared helpers
 
 The knowledge base will retain the roadmap's `01_...py` through `12_...py` filenames and give every script an `async main()` invoked through `asyncio.run()`. A small local helper module will own common configuration parsing, secret/account masking, session lifecycle, timeout wrappers, output formatting, and optional CSV writing. Topic-specific SDK calls remain directly visible in each script.
@@ -34,11 +41,63 @@ Credentials are read only from documented environment variables (`TASTYTRADE_CLI
 
 Sandbox mode remains explicit and uses its own credentials. Production-only streaming scripts must reject sandbox mode rather than silently changing environments.
 
+There is no existing command-line argument convention to reuse for these
+exploratory testing scripts. The demo suite will establish and document its own
+consistent input conventions; exact argument names remain to be chosen during
+implementation.
+
 ### Bound all externally driven work and label data honestly
 
 Network requests use finite timeouts. Streaming scripts accept a maximum event count and timeout, unsubscribe and close in `finally` cleanup, and report whether collection ended by the configured limit, timeout, or error. Candle output is sorted, deduplicated, range-filtered, timezone-preserving, and labeled partial unless the tested SDK provides a reliable completion signal.
 
 This favors reproducible demonstrations over convenience. Unbounded streaming and implicit defaults were rejected because neither produces a dependable reference result.
+
+Prior experience suggests DXLink candle backfills can be throttled and may not emit
+every requested candle before a deadline, particularly for large ranges. Until the
+selected SDK exposes and passes a verified completion signal, a requested candle
+range is therefore a timeout-bounded partial result rather than a complete dataset.
+The candle helper will make that status visible and will later be evaluated for
+reliable retrieval of a requested block without hiding streaming behavior.
+
+### Evaluate bounded retry-based candle backfill in the helper
+
+A repository backfill algorithm has not been established. The proposed helper
+will request a time-bounded block, collect candles for a configured attempt
+duration, then unsubscribe and close the streamer before retrying if completion
+of the initial endpoint check has not been established. Each retry may use a revised start time based on the
+observed coverage. Attempts will share a finite overall deadline and a configured
+maximum attempt count, with bounded delays between retries.
+
+Collected rows will be merged, sorted, and deduplicated across attempts. The
+initial finish signal is receipt of at least one candle for each adjusted endpoint.
+Use `pandas_market_calendars`, already present in the tested SDK dependency lock,
+with the instrument's exchange/product calendar rather than a generic federal
+holiday calendar. Move a closed-market start date forward to the next trading
+session. Move today, or an explicitly historical end date, backward to the latest
+session that has opened at or before the requested end time and the current time.
+This avoids holiday/weekend endpoints and expecting today's candle before market
+open. Preserve intraday range bounds, use the calendar's session labels and timezone
+for endpoint matching, and report the selected calendar and adjusted endpoint dates.
+An unknown calendar or a range containing no eligible session must produce an
+actionable error rather than silently falling back to weekdays or widening the range.
+A retry must retain the adjusted start target until its candle has
+arrived; receipt of a recent candle alone does not satisfy both endpoints.
+
+This endpoint check is deliberately a simple stopping heuristic, not proof that
+every candle in the range arrived. Internal-gap detection and recovery are out of
+scope initially; downstream gap handling remains with DearCyFi. Stronger coverage
+checks are deferred. If an eligible target session has no
+candle, the helper must still respect its attempt and time budgets rather than
+silently treating the missing endpoint as satisfied.
+
+The result will expose the attempt count, received coverage, stop reason, and
+whether both endpoints were observed. Satisfying both endpoints stops collection
+with an endpoint-coverage status; the dataset remains labeled partial unless a
+tested SDK signal independently proves completeness. Exhausting the attempt or
+time budget will also return an explicitly partial result.
+Authentication, permission, and other non-retryable failures remain actionable
+errors rather than being hidden by retries. This is a proposed recovery strategy
+to evaluate, not a guarantee that provider throttling can be overcome.
 
 ### Make safety properties mechanically testable
 
@@ -69,6 +128,4 @@ This is additive. If a script proves incompatible with the selected SDK, remove 
 
 ## Open Questions
 
-- Which exact Python version and `tastytrade` SDK version will be the initial supported, tested baseline?
-- Does the selected SDK expose a reliable historical-candle backfill completion signal, and what should the demo call it if it does not?
-- Which command-line argument convention, if any, already exists elsewhere in the repository and should be reused for script inputs?
+None currently.
