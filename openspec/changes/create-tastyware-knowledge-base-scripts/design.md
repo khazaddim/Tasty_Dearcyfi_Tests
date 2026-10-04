@@ -37,9 +37,9 @@ This provides a consistent safety baseline without concealing the SDK APIs reade
 
 ### Make configuration explicit and fail closed
 
-Credentials are read only from documented environment variables (`TASTYTRADE_CLIENT_SECRET` and `TASTYTRADE_REFRESH_TOKEN`); script-specific inputs use documented arguments or environment variables. Scripts validate required configuration before opening sessions, require an explicit account selection for account-specific actions, and surface actionable authentication, permissions, network, and timeout errors without printing sensitive values.
+Credentials are read only from the existing documented machine environment variables (`Tasty_SECRET` and `Tasty_Refresh`); their values are never written to source, documentation, logs, or test fixtures. Script-specific inputs use documented arguments or environment variables. Scripts validate required configuration before opening sessions, require explicit production environment selection and explicit account selection for account-specific actions, and surface actionable authentication, permissions, network, and timeout errors without printing sensitive values.
 
-Sandbox mode remains explicit and uses its own credentials. Production-only streaming scripts must reject sandbox mode rather than silently changing environments.
+The demos target production only because sandbox behavior and feature availability differ from production. Every authenticated demo requires explicit production selection and rejects sandbox selection; it must never silently switch environments. Credentialed checks remain opt-in and use only locally supplied production credentials.
 
 There is no existing command-line argument convention to reuse for these
 exploratory testing scripts. The demo suite will establish and document its own
@@ -101,7 +101,7 @@ to evaluate, not a guarantee that provider throttling can be overcome.
 
 ### Make safety properties mechanically testable
 
-The order script always passes `dry_run=True`, never exposes a live-order switch, and displays only a preview/validation result. Helpers are designed so credential-free tests can verify configuration validation, redaction, values sent to order construction, output schema, and bounded collector behavior. Live integration verification is opt-in, never part of normal automated tests, and requires users' local credentials.
+The order script always passes `dry_run=True`, never exposes a live-order switch, and displays only a preview/validation result. Helpers are designed so credential-free tests can verify configuration validation, redaction, values sent to order construction, output schema, and bounded collector behavior. Live integration verification is opt-in, never part of normal automated tests, and requires users' local credentials. Begin with an authenticated `01_test_connection.py` smoke check as soon as that script is implemented, then validate each completed phase against production before proceeding. No sandbox checks are planned because sandbox behavior and feature availability differ.
 
 ### Keep documentation colocated with each script and indexed centrally
 
@@ -122,7 +122,8 @@ Each script begins with a concise module docstring containing purpose, upstream 
 2. Implement helpers and the Phase 1 account-reference scripts with credential-free tests.
 3. Add Phase 2 market-data/history scripts, exports, and bounded streaming tests.
 4. Add Phase 3 options and dry-run order-preview scripts with a test that prevents accidental live submission.
-5. Update the README as each script is implemented and run opt-in, read-only smoke checks with locally supplied credentials.
+5. Run the first opt-in authenticated connection check immediately after implementing `01_test_connection.py`; run further opt-in, read-only smoke checks with locally supplied credentials after each phase, before starting the next.
+6. Update the README as each script is implemented and record only redacted verification results.
 
 This is additive. If a script proves incompatible with the selected SDK, remove it from the index or restore the prior documentation-only state; no existing application behavior or stored data requires migration.
 

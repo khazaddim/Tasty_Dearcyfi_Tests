@@ -6,12 +6,12 @@
 - [x] 1.4 Add and run a credential-free compatibility smoke test that imports `tastytrade` and every module used by the proposed session, account, market-data, DXLink, instrument, and order demos; confirm it opens no session and makes no network request.
 - [x] 1.5 Run the repository's available credential-free static checks and test command under Python 3.14t; record any unsupported dependency, import failure, or interpreter-specific behavior.
 - [x] 1.6 Select and document Python 3.14t plus the exact tested SDK baseline in `Tastyware_Demo_Scripts/README.md` only after tasks 1.2 through 1.5 pass; otherwise document the failure and select a verified standard CPython fallback before implementing demos.
-- [ ] 1.7 Define the `TASTYTRADE_CLIENT_SECRET`, `TASTYTRADE_REFRESH_TOKEN`, environment-selection, account-selection, timeout, and output-directory conventions in the README.
+- [ ] 1.7 Document `Tasty_SECRET` and `Tasty_Refresh` as the credential environment variables, require explicit production environment selection, and define account-selection, timeout, and output-directory conventions in the README.
 - [ ] 1.8 Add Git ignore coverage for the local demo export directory and verify no credential, token, account-data, or generated export path can be committed.
 
 ## 2. Build shared safety and documentation infrastructure
 
-- [ ] 2.1 Create a small local helper module for required environment-variable validation, explicit sandbox/production configuration, and actionable failures that do not expose secret values.
+- [ ] 2.1 Create a small local helper module for required environment-variable validation, explicit production-only configuration, and actionable failures that do not expose secret values.
 - [ ] 2.2 Add shared account-number and sensitive-value redaction/formatting helpers and test representative values.
 - [ ] 2.3 Add session and timeout lifecycle helpers that cleanly close resources and distinguish authentication, permission, network, and timeout failures.
 - [ ] 2.4 Add bounded streaming-collection helpers that report event-limit, timeout, and failure completion states and clean up subscriptions in `finally`.
@@ -21,11 +21,13 @@
 ## 3. Implement Phase 1 connection and account references
 
 - [ ] 3.1 Implement `01_test_connection.py` with an authenticated account request, SDK/version/environment reporting, and separate zero-account versus authentication failure handling.
-- [ ] 3.2 Implement `02_list_accounts.py` with masked account summaries and explicit account-selection instructions.
-- [ ] 3.3 Implement `03_account_balances.py` with explicit account selection and labeled balance, buying-power, net-liquidating-value, and available timestamp output.
-- [ ] 3.4 Implement `04_current_positions.py` with empty-position handling and labeled symbol, instrument, quantity/direction, and average-open-price output.
-- [ ] 3.5 Add credential-free unit tests for Phase 1 configuration validation, redaction, empty results, account-selection behavior, and output formatting.
-- [ ] 3.6 Update the README index with Phase 1 status, exact PowerShell commands, inputs, expected output, and known failures.
+- [ ] 3.2 With locally supplied, non-committed production credentials, run `01_test_connection.py` as the first opt-in authenticated smoke check; verify production is explicitly selected and record only redacted results.
+- [ ] 3.3 Implement `02_list_accounts.py` with masked account summaries and explicit account-selection instructions.
+- [ ] 3.4 Implement `03_account_balances.py` with explicit account selection and labeled balance, buying-power, net-liquidating-value, and available timestamp output.
+- [ ] 3.5 Implement `04_current_positions.py` with empty-position handling and labeled symbol, instrument, quantity/direction, and average-open-price output.
+- [ ] 3.6 Add credential-free unit tests for Phase 1 configuration validation, redaction, empty results, account-selection behavior, and output formatting.
+- [ ] 3.7 With locally supplied, non-committed production credentials, run opt-in, read-only smoke checks for the completed Phase 1 account scripts before beginning Phase 2; record only redacted results.
+- [ ] 3.8 Update the README index with Phase 1 status, exact PowerShell commands, inputs, expected output, and known failures.
 
 ## 4. Implement Phase 2 market and historical-data references
 
@@ -36,7 +38,8 @@
 - [ ] 4.5 Implement `08_account_transaction_history.py` with explicit account/date inputs, transaction field formatting, and documented pagination behavior for the selected SDK.
 - [ ] 4.6 Implement `09_account_value_history.py` with explicit account/lookback inputs, timestamp/value output, optional CSV export, and documentation that values can include deposits and withdrawals.
 - [ ] 4.7 Add credential-free unit tests for snapshot missing/stale values, streaming completion states, candle normalization/export, start/end endpoint checks, exchange-holiday/weekend adjustments, pre-open end dates, session-label/timezone matching, preserved intraday bounds, unknown calendars and ranges with no eligible session, missing endpoints, retry cleanup and budgets, duplicate/revised candles, out-of-order arrivals, endpoint success with internal gaps remaining labeled partial, no-progress attempts, non-retryable failures, and history pagination behavior.
-- [ ] 4.8 Update the README index with Phase 2 status, commands, production-only restrictions, export location, and partial-data guidance.
+- [ ] 4.8 With locally supplied, non-committed production credentials, run opt-in, read-only smoke checks for the completed Phase 2 market-data and history scripts before beginning Phase 3; record production-specific behavior and only redacted results.
+- [ ] 4.9 Update the README index with Phase 2 status, commands, production-only restrictions, export location, and partial-data guidance.
 
 ## 5. Implement Phase 3 options and safe order-preview references
 
@@ -45,11 +48,12 @@
 - [ ] 5.3 Implement `12_order_dry_run.py` with explicit account, symbol, quantity, and `Decimal` limit-price inputs; display proposed order, validation, buying-power, and fee information when available.
 - [ ] 5.4 Add a regression test that verifies the order-preview SDK call always receives `dry_run=True` and that no live-order option/path exists.
 - [ ] 5.5 Add credential-free unit tests for option/Greek input validation, bounded streaming results, signed-price documentation, and dry-run output formatting.
-- [ ] 5.6 Update the README index with Phase 3 status, commands, expected output, and the explicit live-order exclusion.
+- [ ] 5.6 With locally supplied, non-committed production credentials, run opt-in, read-only smoke checks for the completed Phase 3 data demos and the SDK's dry-run order preview; do not submit a live order and record only redacted results.
+- [ ] 5.7 Update the README index with Phase 3 status, commands, expected output, and the explicit live-order exclusion.
 
 ## 6. Verify and publish the knowledge base
 
 - [ ] 6.1 Run the focused credential-free test suite without credentials and confirm it makes no network requests.
 - [ ] 6.2 Run each script's syntax/type/lint checks using the repository's established tooling.
-- [ ] 6.3 With locally supplied, non-committed credentials, execute opt-in read-only smoke checks for supported environment paths and record only redacted verification results in documentation.
+- [ ] 6.3 Confirm the phase-by-phase opt-in production smoke checks were completed and that only redacted verification results are recorded; do not defer first credential validation until this final phase.
 - [ ] 6.4 Review every script and README entry against the knowledge-base checklist, confirming exact PowerShell invocation, input/output/failure documentation, resource cleanup, and accurate completion-state claims.

@@ -23,11 +23,11 @@ The demo suite SHALL obtain credentials only from documented environment variabl
 - **THEN** the demo does not choose an account and reports how to provide the selection
 
 ### Requirement: Explicit environment and bounded external operations
-Every demo SHALL require explicit sandbox or production selection, SHALL reject a sandbox configuration for production-only DXLink streaming, and SHALL apply finite timeouts to network and streaming operations. Streaming demos SHALL accept a bounded collection policy, clean up subscriptions and resources, and state whether output is complete, bounded, timed out, or failed.
+Every authenticated demo SHALL require explicit production selection and SHALL reject sandbox selection; the suite SHALL NOT use sandbox credentials or claim sandbox compatibility. Every demo SHALL apply finite timeouts to network and streaming operations. Streaming demos SHALL accept a bounded collection policy, clean up subscriptions and resources, and state whether output is complete, bounded, timed out, or failed.
 
-#### Scenario: Sandbox quote-stream request
-- **WHEN** a user invokes a DXLink quote, candle, or Greeks demo in sandbox mode
-- **THEN** the demo rejects the request with an explanation that streaming requires the documented production session
+#### Scenario: Sandbox environment request
+- **WHEN** a user selects sandbox for an authenticated demo
+- **THEN** the demo rejects the request and explains that this knowledge base is tested against production only
 
 #### Scenario: Streaming deadline expires
 - **WHEN** a streaming demo reaches its configured timeout before its event limit
@@ -70,11 +70,17 @@ The option-chain and Greeks demos SHALL use actual contract streamer symbols and
 - **THEN** no such option or execution path is available
 
 ### Requirement: Verifiable documentation and safety behavior
-The repository SHALL provide automated tests for credential-free shared behavior, including required-configuration validation, output redaction, bounded collection logic, predictable export schema, and the enforced dry-run order invocation. Live credentialed checks SHALL be opt-in, read-only except for SDK dry-run validation, and excluded from routine automated test runs.
+The repository SHALL provide automated tests for credential-free shared behavior, including required-configuration validation, output redaction, bounded collection logic, predictable export schema, and the enforced dry-run order invocation. Live credentialed checks SHALL be opt-in, read-only except for SDK dry-run validation, and excluded from routine automated test runs. Credentialed production smoke checks SHALL begin immediately after `01_test_connection.py` is implemented and be repeated incrementally for each completed phase before work proceeds to the next phase.
 
 #### Scenario: Running routine tests without credentials
 - **WHEN** the demo-suite automated tests run without Tastytrade credentials
 - **THEN** they validate shared safety and formatting behavior without initiating a network request
+
+#### Scenario: Validating credentials and scripts incrementally
+- **WHEN** `01_test_connection.py` and then each subsequent phase are implemented
+- **THEN** the developer can opt in to local-credential smoke checks at that point, beginning with an authenticated connection check and validating each completed phase before proceeding
+- **AND** credential values remain local and verification results are redacted
+- **AND** all credentialed checks target production; sandbox is not used because its behavior and feature availability differ
 
 #### Scenario: Updating the script index
 - **WHEN** a demo is implemented or its tested SDK compatibility changes
