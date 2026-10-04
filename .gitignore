@@ -222,3 +222,9 @@ __marimo__/
 
 # ignore custom wheel folder
 DCG_Custom_whl/*
+
+# Tastyware demo credentials and private local exports
+Tastyware_Demo_Scripts/.env*
+Tastyware_Demo_Scripts/*.token
+Tastyware_Demo_Scripts/*.tokens
+Tastyware_Demo_Scripts/exports/

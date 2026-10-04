@@ -66,26 +66,48 @@ the current asynchronous OAuth API.
 
 ## Setup and safety conventions
 
-- Document installation and OAuth application/grant setup before the first demo.
-  Use environment variables such as `TASTYTRADE_CLIENT_SECRET` and
-  `TASTYTRADE_REFRESH_TOKEN`; these are our proposed names, not SDK requirements.
-  Never hard-code, print, or commit credentials or session tokens.
-- Make the environment explicit. Sandbox sessions use `is_test=True` and their
-  own credentials. DXLink streaming requires a production session according to
-  the documentation; do not silently switch from sandbox to production.
+- All authenticated demos use the existing machine environment variables
+  `Tasty_SECRET` (client secret) and `Tasty_Refresh` (refresh token). These are
+  read locally at runtime; never paste their values into commands, source,
+  documentation, logs, or test fixtures. Do not put credentials in a `.env`
+  file.
+- This knowledge base is production-only. Every authenticated demo requires
+  `TASTYTRADE_ENV=production`; sandbox is not supported or used for validation
+  because its behavior and feature availability differ from production. A
+  script must reject a sandbox selection rather than silently switching
+  environments.
+- From PowerShell at the repository root, select production and check that the
+  existing credentials are available without displaying their values:
+
+  ```powershell
+  $env:TASTYTRADE_ENV = 'production'
+  if ([string]::IsNullOrWhiteSpace($env:Tasty_SECRET) -or
+      [string]::IsNullOrWhiteSpace($env:Tasty_Refresh)) {
+      throw 'Set the Tasty_SECRET and Tasty_Refresh environment variables before running an authenticated demo.'
+  }
+  ```
+
+- Account-specific demos use `TASTYTRADE_ACCOUNT_NUMBER` when an account must
+  be selected. If exactly one account is available, a demo may use it; if
+  multiple accounts are available and no account is selected, it must stop and
+  explain how to choose one. Display account numbers in masked form only.
+- Network operations have a finite timeout. Use
+  `TASTYTRADE_TIMEOUT_SECONDS` with a documented default of 30 seconds for
+  requests; streaming demos also take an explicit finite event limit and
+  timeout so collection always ends and reports whether it was bounded or
+  timed out.
+- Optional exports go only under
+  `Tastyware_Demo_Scripts\exports\`. This local directory is ignored by Git;
+  do not commit account data or generated exports.
 - Keep account and market-data demos read-only. The order demo must always use
   `dry_run=True`; live submission, replacement, and cancellation are out of scope.
-- Require explicit account selection when multiple accounts are available.
-  Mask account numbers in normal output and redact personal information in
-  screenshots or saved examples.
 - Use the SDK's asynchronous patterns with a runnable async entry point, and
   close sessions/streamers using their supported lifecycle APIs.
 - Put time limits on network calls and streaming demos. Report authentication,
   permission, network, and timeout errors clearly rather than claiming success.
 - Keep dependencies minimal. Use standard-library CSV/JSON export initially;
   plotting and GUI dependencies belong in later, optional demos.
-- Before adding exports, ignore the chosen output directory in Git. Never commit
-  private account data; knowledge-base examples should use redacted sample output.
+- Redact personal information in screenshots or saved examples.
 
 ## Phase 1: Connection and account basics
 

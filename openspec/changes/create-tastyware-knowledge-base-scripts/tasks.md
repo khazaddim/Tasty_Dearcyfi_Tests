@@ -6,8 +6,8 @@
 - [x] 1.4 Add and run a credential-free compatibility smoke test that imports `tastytrade` and every module used by the proposed session, account, market-data, DXLink, instrument, and order demos; confirm it opens no session and makes no network request.
 - [x] 1.5 Run the repository's available credential-free static checks and test command under Python 3.14t; record any unsupported dependency, import failure, or interpreter-specific behavior.
 - [x] 1.6 Select and document Python 3.14t plus the exact tested SDK baseline in `Tastyware_Demo_Scripts/README.md` only after tasks 1.2 through 1.5 pass; otherwise document the failure and select a verified standard CPython fallback before implementing demos.
-- [ ] 1.7 Document `Tasty_SECRET` and `Tasty_Refresh` as the credential environment variables, require explicit production environment selection, and define account-selection, timeout, and output-directory conventions in the README.
-- [ ] 1.8 Add Git ignore coverage for the local demo export directory and verify no credential, token, account-data, or generated export path can be committed.
+- [x] 1.7 Document `Tasty_SECRET` and `Tasty_Refresh` as the credential environment variables, require explicit production environment selection, and define account-selection, timeout, and output-directory conventions in the README.
+- [x] 1.8 Add Git ignore coverage for the local demo export directory and verify no credential, token, account-data, or generated export path can be committed.
 
 ## 2. Build shared safety and documentation infrastructure
 
