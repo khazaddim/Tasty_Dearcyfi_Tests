@@ -22,10 +22,12 @@ from Tastyware_Demo_Scripts.demo_shared import (
     collect_bounded_stream,
     export_candles_to_csv,
     load_runtime_config,
+    managed_async_resource,
     mask_account_number,
     normalize_candles,
     redact_sensitive_mapping,
     redact_sensitive_value,
+    run_callable_with_timeout,
 )
 
 
@@ -62,6 +64,17 @@ class DemoSharedConfigTest(unittest.TestCase):
         self.assertEqual(config.environment, "production")
         self.assertEqual(config.timeout_seconds, 45.5)
         self.assertEqual(config.account_number, "12345678")
+
+    def test_load_runtime_config_accepts_windows_uppercased_credential_keys(self) -> None:
+        config = load_runtime_config(
+            {
+                "TASTY_SECRET": "top-secret",
+                "TASTY_REFRESH": "refresh-token",
+                "TASTYTRADE_ENV": "production",
+            }
+        )
+        self.assertEqual(config.client_secret, "top-secret")
+        self.assertEqual(config.refresh_token, "refresh-token")
 
 
 class DemoSharedRedactionTest(unittest.TestCase):
@@ -105,6 +118,22 @@ class DemoSharedFailureClassificationTest(unittest.TestCase):
         )
 
 
+class DemoSharedCallableRunnerTest(unittest.IsolatedAsyncioTestCase):
+    async def test_run_callable_with_timeout_supports_sync_callables(self) -> None:
+        def sync_operation(value: int) -> int:
+            return value + 1
+
+        result = await run_callable_with_timeout("sync operation", sync_operation, 1.0, 2)
+        self.assertEqual(result, 3)
+
+    async def test_run_callable_with_timeout_awaits_async_results(self) -> None:
+        async def async_operation(value: int) -> int:
+            return value + 2
+
+        result = await run_callable_with_timeout("async operation", async_operation, 1.0, 3)
+        self.assertEqual(result, 5)
+
+
 class DemoSharedStreamingTest(unittest.IsolatedAsyncioTestCase):
     async def test_collect_bounded_stream_stops_on_event_limit(self) -> None:
         async def stream():
@@ -127,6 +156,25 @@ class DemoSharedStreamingTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.events, [0, 1, 2])
         self.assertEqual(result.completion_state, "event_limit")
         self.assertTrue(cleaned_up)
+
+
+class DemoSharedManagedResourceTest(unittest.IsolatedAsyncioTestCase):
+    async def test_managed_async_resource_uses_async_context_manager_protocol(self) -> None:
+        events: list[str] = []
+
+        class AsyncContextResource:
+            async def __aenter__(self):
+                events.append("enter")
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                events.append("exit")
+                return False
+
+        resource = AsyncContextResource()
+        async with managed_async_resource(resource):
+            events.append("inside")
+        self.assertEqual(events, ["enter", "inside", "exit"])
 
     async def test_collect_bounded_stream_reports_timeout(self) -> None:
         async def stream():

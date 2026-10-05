@@ -50,7 +50,7 @@ try:
         managed_async_resource,
         mask_account_number,
         normalize_account_collection,
-        run_with_timeout,
+        run_callable_with_timeout,
     )
 except ModuleNotFoundError:
     from demo_shared import (
@@ -62,7 +62,7 @@ except ModuleNotFoundError:
         managed_async_resource,
         mask_account_number,
         normalize_account_collection,
-        run_with_timeout,
+        run_callable_with_timeout,
     )
 
 
@@ -75,10 +75,11 @@ async def run_connection_check() -> int:
 
     async with managed_async_resource(session):
         try:
-            accounts_raw = await run_with_timeout(
+            accounts_raw = await run_callable_with_timeout(
                 "authenticated account lookup",
-                asyncio.to_thread(Account.get, session),
+                Account.get,
                 config.timeout_seconds,
+                session,
             )
         except DemoAuthenticationError:
             print("Authentication failed. Verify Tasty_SECRET/Tasty_Refresh for production.")

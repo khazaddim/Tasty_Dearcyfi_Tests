@@ -44,7 +44,7 @@ try:
         mask_account_number,
         normalize_account_collection,
         require_selected_account,
-        run_with_timeout,
+        run_callable_with_timeout,
     )
 except ModuleNotFoundError:
     from demo_shared import (
@@ -56,7 +56,7 @@ except ModuleNotFoundError:
         mask_account_number,
         normalize_account_collection,
         require_selected_account,
-        run_with_timeout,
+        run_callable_with_timeout,
     )
 
 
@@ -64,10 +64,11 @@ async def list_accounts() -> int:
     config = load_runtime_config()
     session = Session(provider_secret=config.client_secret, refresh_token=config.refresh_token)
     async with managed_async_resource(session):
-        accounts_raw = await run_with_timeout(
+        accounts_raw = await run_callable_with_timeout(
             "account list request",
-            asyncio.to_thread(Account.get, session),
+            Account.get,
             config.timeout_seconds,
+            session,
         )
 
     accounts = normalize_account_collection(accounts_raw)

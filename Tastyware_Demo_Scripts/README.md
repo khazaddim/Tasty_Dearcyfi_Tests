@@ -45,6 +45,10 @@ if ([string]::IsNullOrWhiteSpace($env:Tasty_SECRET) -or
 }
 ```
 
+Windows note: Python may expose user environment variable names in uppercase
+(`TASTY_SECRET` / `TASTY_REFRESH`) even when you set `Tasty_SECRET` /
+`Tasty_Refresh` in PowerShell. The shared loader accepts either form.
+
 ## Shared infrastructure
 
 - [demo_shared.py](./demo_shared.py): config validation, production-only
@@ -119,4 +123,3 @@ results:
 3. Phase 3 smoke checks: `10`–`12` (`12` remains dry-run only)
 
 Do not commit credential material, full account numbers, tokens, or private exports.
-

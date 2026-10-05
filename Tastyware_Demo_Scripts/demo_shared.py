@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import csv
+import inspect
 import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -186,11 +187,25 @@ def parse_decimal(value: str | None, *, name: str) -> Decimal:
         raise DemoConfigurationError(f"{name} must be a valid decimal value.") from exc
 
 
+def get_first_env_value(values: Mapping[str, str], *names: str) -> str | None:
+    """Return the first present env var value across candidate names."""
+    for name in names:
+        if name in values:
+            return values[name]
+    return None
+
+
 def load_runtime_config(environ: Mapping[str, str] | None = None) -> DemoRuntimeConfig:
     """Load and validate shared environment-driven demo configuration."""
     values = dict(os.environ if environ is None else environ)
-    client_secret = require_env_var("Tasty_SECRET", values.get("Tasty_SECRET"))
-    refresh_token = require_env_var("Tasty_Refresh", values.get("Tasty_Refresh"))
+    client_secret = require_env_var(
+        "Tasty_SECRET",
+        get_first_env_value(values, "Tasty_SECRET", "TASTY_SECRET"),
+    )
+    refresh_token = require_env_var(
+        "Tasty_Refresh",
+        get_first_env_value(values, "Tasty_Refresh", "TASTY_REFRESH"),
+    )
     environment = require_production_environment(values.get("TASTYTRADE_ENV"))
     timeout_seconds = parse_timeout_seconds(values.get("TASTYTRADE_TIMEOUT_SECONDS"))
     account_number = values.get("TASTYTRADE_ACCOUNT_NUMBER")
@@ -307,6 +322,27 @@ async def run_with_timeout(
         raise classify_failure(exc, operation_name) from exc
 
 
+async def run_callable_with_timeout(
+    operation_name: str,
+    operation: Callable[..., Any],
+    timeout_seconds: float,
+    *args: Any,
+    **kwargs: Any,
+) -> Any:
+    """Run a callable that may be sync or async under one timeout/error policy."""
+    if inspect.iscoroutinefunction(operation):
+        return await run_with_timeout(operation_name, operation(*args, **kwargs), timeout_seconds)
+
+    result = await run_with_timeout(
+        operation_name,
+        asyncio.to_thread(operation, *args, **kwargs),
+        timeout_seconds,
+    )
+    if inspect.isawaitable(result):
+        return await run_with_timeout(operation_name, result, timeout_seconds)
+    return result
+
+
 async def close_async_resource(resource: Any) -> None:
     """Close a resource via aclose/close when available."""
     for method_name in ("aclose", "close"):
@@ -325,6 +361,12 @@ ResourceType = TypeVar("ResourceType")
 @asynccontextmanager
 async def managed_async_resource(resource: ResourceType) -> AsyncIterator[ResourceType]:
     """Yield a resource and guarantee closure in finally."""
+    enter = getattr(resource, "__aenter__", None)
+    exit_method = getattr(resource, "__aexit__", None)
+    if callable(enter) and callable(exit_method):
+        async with resource as entered:
+            yield entered
+        return
     try:
         yield resource
     finally:

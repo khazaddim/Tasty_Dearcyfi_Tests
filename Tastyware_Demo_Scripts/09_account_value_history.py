@@ -44,6 +44,7 @@ try:
         parse_bool,
         require_env_var,
         require_selected_account,
+        run_callable_with_timeout,
         run_with_timeout,
     )
 except ModuleNotFoundError:
@@ -58,6 +59,7 @@ except ModuleNotFoundError:
         parse_bool,
         require_env_var,
         require_selected_account,
+        run_callable_with_timeout,
         run_with_timeout,
     )
 
@@ -83,10 +85,11 @@ async def fetch_value_history() -> int:
 
     session = Session(provider_secret=config.client_secret, refresh_token=config.refresh_token)
     async with managed_async_resource(session):
-        accounts_raw = await run_with_timeout(
+        accounts_raw = await run_callable_with_timeout(
             "account discovery",
-            asyncio.to_thread(Account.get, session),
+            Account.get,
             config.timeout_seconds,
+            session,
         )
         accounts = normalize_account_collection(accounts_raw)
         selected_account = require_selected_account(accounts, config.account_number)
