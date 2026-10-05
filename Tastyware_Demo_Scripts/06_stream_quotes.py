@@ -28,16 +28,28 @@ from tastytrade.dxfeed import Quote
 from tastytrade.session import Session
 from tastytrade.streamer import DXLinkStreamer
 
-from Tastyware_Demo_Scripts.demo_shared import (
-    DemoConfigurationError,
-    DemoHelperError,
-    collect_bounded_stream,
-    load_runtime_config,
-    managed_async_resource,
-    parse_csv_symbols,
-    parse_positive_int,
-    parse_timeout_seconds,
-)
+try:
+    from Tastyware_Demo_Scripts.demo_shared import (
+        DemoConfigurationError,
+        DemoHelperError,
+        collect_bounded_stream,
+        load_runtime_config,
+        managed_async_resource,
+        parse_csv_symbols,
+        parse_positive_int,
+        parse_timeout_seconds,
+    )
+except ModuleNotFoundError:
+    from demo_shared import (
+        DemoConfigurationError,
+        DemoHelperError,
+        collect_bounded_stream,
+        load_runtime_config,
+        managed_async_resource,
+        parse_csv_symbols,
+        parse_positive_int,
+        parse_timeout_seconds,
+    )
 
 
 async def stream_quotes() -> int:

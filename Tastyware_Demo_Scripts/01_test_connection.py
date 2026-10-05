@@ -40,17 +40,30 @@ import tastytrade
 from tastytrade.account import Account
 from tastytrade.session import Session
 
-from Tastyware_Demo_Scripts.demo_shared import (
-    DemoAuthenticationError,
-    DemoConfigurationError,
-    DemoHelperError,
-    account_number_from_object,
-    load_runtime_config,
-    managed_async_resource,
-    mask_account_number,
-    normalize_account_collection,
-    run_with_timeout,
-)
+try:
+    from Tastyware_Demo_Scripts.demo_shared import (
+        DemoAuthenticationError,
+        DemoConfigurationError,
+        DemoHelperError,
+        account_number_from_object,
+        load_runtime_config,
+        managed_async_resource,
+        mask_account_number,
+        normalize_account_collection,
+        run_with_timeout,
+    )
+except ModuleNotFoundError:
+    from demo_shared import (
+        DemoAuthenticationError,
+        DemoConfigurationError,
+        DemoHelperError,
+        account_number_from_object,
+        load_runtime_config,
+        managed_async_resource,
+        mask_account_number,
+        normalize_account_collection,
+        run_with_timeout,
+    )
 
 
 async def run_connection_check() -> int:

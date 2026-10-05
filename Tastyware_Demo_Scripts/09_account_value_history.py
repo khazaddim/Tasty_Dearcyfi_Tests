@@ -32,19 +32,34 @@ import os
 from tastytrade.account import Account
 from tastytrade.session import Session
 
-from Tastyware_Demo_Scripts.demo_shared import (
-    DemoConfigurationError,
-    DemoHelperError,
-    account_number_from_object,
-    load_runtime_config,
-    managed_async_resource,
-    mask_account_number,
-    normalize_account_collection,
-    parse_bool,
-    require_env_var,
-    require_selected_account,
-    run_with_timeout,
-)
+try:
+    from Tastyware_Demo_Scripts.demo_shared import (
+        DemoConfigurationError,
+        DemoHelperError,
+        account_number_from_object,
+        load_runtime_config,
+        managed_async_resource,
+        mask_account_number,
+        normalize_account_collection,
+        parse_bool,
+        require_env_var,
+        require_selected_account,
+        run_with_timeout,
+    )
+except ModuleNotFoundError:
+    from demo_shared import (
+        DemoConfigurationError,
+        DemoHelperError,
+        account_number_from_object,
+        load_runtime_config,
+        managed_async_resource,
+        mask_account_number,
+        normalize_account_collection,
+        parse_bool,
+        require_env_var,
+        require_selected_account,
+        run_with_timeout,
+    )
 
 
 def export_value_history_csv(rows: list[object], output_path: str) -> str:

@@ -42,19 +42,34 @@ from tastytrade.dxfeed import Candle
 from tastytrade.session import Session
 from tastytrade.streamer import DXLinkStreamer
 
-from Tastyware_Demo_Scripts.demo_shared import (
-    DemoConfigurationError,
-    DemoHelperError,
-    DemoTimeoutError,
-    collect_bounded_stream,
-    export_candles_to_csv,
-    load_runtime_config,
-    managed_async_resource,
-    normalize_candles,
-    parse_bool,
-    parse_positive_int,
-    parse_timeout_seconds,
-)
+try:
+    from Tastyware_Demo_Scripts.demo_shared import (
+        DemoConfigurationError,
+        DemoHelperError,
+        DemoTimeoutError,
+        collect_bounded_stream,
+        export_candles_to_csv,
+        load_runtime_config,
+        managed_async_resource,
+        normalize_candles,
+        parse_bool,
+        parse_positive_int,
+        parse_timeout_seconds,
+    )
+except ModuleNotFoundError:
+    from demo_shared import (
+        DemoConfigurationError,
+        DemoHelperError,
+        DemoTimeoutError,
+        collect_bounded_stream,
+        export_candles_to_csv,
+        load_runtime_config,
+        managed_async_resource,
+        normalize_candles,
+        parse_bool,
+        parse_positive_int,
+        parse_timeout_seconds,
+    )
 
 
 @dataclass(frozen=True)

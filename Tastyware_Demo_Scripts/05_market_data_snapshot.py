@@ -29,14 +29,24 @@ from tastytrade.market_data import get_market_data
 from tastytrade.order import InstrumentType
 from tastytrade.session import Session
 
-from Tastyware_Demo_Scripts.demo_shared import (
-    DemoConfigurationError,
-    DemoHelperError,
-    load_runtime_config,
-    managed_async_resource,
-    parse_positive_int,
-    run_with_timeout,
-)
+try:
+    from Tastyware_Demo_Scripts.demo_shared import (
+        DemoConfigurationError,
+        DemoHelperError,
+        load_runtime_config,
+        managed_async_resource,
+        parse_positive_int,
+        run_with_timeout,
+    )
+except ModuleNotFoundError:
+    from demo_shared import (
+        DemoConfigurationError,
+        DemoHelperError,
+        load_runtime_config,
+        managed_async_resource,
+        parse_positive_int,
+        run_with_timeout,
+    )
 
 
 def parse_instrument_type(value: str | None) -> InstrumentType:
