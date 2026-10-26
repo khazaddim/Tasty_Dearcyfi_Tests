@@ -36,7 +36,7 @@ try:
         load_runtime_config,
         managed_async_resource,
         parse_positive_int,
-        run_with_timeout,
+        run_callable_with_timeout,
     )
 except ModuleNotFoundError:
     from demo_shared import (
@@ -45,7 +45,7 @@ except ModuleNotFoundError:
         load_runtime_config,
         managed_async_resource,
         parse_positive_int,
-        run_with_timeout,
+        run_callable_with_timeout,
     )
 
 
@@ -101,10 +101,13 @@ async def show_snapshot() -> int:
 
     session = Session(provider_secret=config.client_secret, refresh_token=config.refresh_token)
     async with managed_async_resource(session):
-        snapshot = await run_with_timeout(
+        snapshot = await run_callable_with_timeout(
             "market-data snapshot",
-            asyncio.to_thread(get_market_data, session, symbol, instrument_type),
+            get_market_data,
             config.timeout_seconds,
+            session,
+            symbol,
+            instrument_type,
         )
 
     updated_at = getattr(snapshot, "updated_at", None)

@@ -38,6 +38,7 @@ try:
         parse_csv_symbols,
         parse_positive_int,
         parse_timeout_seconds,
+        run_callable_with_timeout,
     )
 except ModuleNotFoundError:
     from demo_shared import (
@@ -49,6 +50,7 @@ except ModuleNotFoundError:
         parse_csv_symbols,
         parse_positive_int,
         parse_timeout_seconds,
+        run_callable_with_timeout,
     )
 
 
@@ -90,10 +92,22 @@ async def run_streamer(
 ):
     streamer = DXLinkStreamer(session)
     async with managed_async_resource(streamer):
-        await asyncio.to_thread(streamer.subscribe, Quote, symbols)
+        await run_callable_with_timeout(
+            "quote subscription",
+            streamer.subscribe,
+            timeout_seconds,
+            Quote,
+            symbols,
+        )
 
         async def cleanup() -> None:
-            await asyncio.to_thread(streamer.unsubscribe, Quote, symbols)
+            await run_callable_with_timeout(
+                "quote unsubscription",
+                streamer.unsubscribe,
+                timeout_seconds,
+                Quote,
+                symbols,
+            )
 
         result = await collect_bounded_stream(
             streamer.listen(Quote),

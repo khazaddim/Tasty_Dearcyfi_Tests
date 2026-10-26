@@ -40,7 +40,6 @@ try:
         normalize_account_collection,
         require_selected_account,
         run_callable_with_timeout,
-        run_with_timeout,
     )
 except ModuleNotFoundError:
     from demo_shared import (
@@ -53,7 +52,6 @@ except ModuleNotFoundError:
         normalize_account_collection,
         require_selected_account,
         run_callable_with_timeout,
-        run_with_timeout,
     )
 
 
@@ -73,10 +71,11 @@ async def show_balances() -> int:
         )
         accounts = normalize_account_collection(accounts_raw)
         selected_account = require_selected_account(accounts, config.account_number)
-        balances = await run_with_timeout(
+        balances = await run_callable_with_timeout(
             "balance lookup",
-            asyncio.to_thread(selected_account.get_balances, session),
+            selected_account.get_balances,
             config.timeout_seconds,
+            session,
         )
 
     masked = mask_account_number(account_number_from_object(selected_account))

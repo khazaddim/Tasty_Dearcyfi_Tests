@@ -71,6 +71,11 @@ Known failures:
 - Missing/invalid config: actionable error naming required env vars.
 - Auth/permission/network/timeout: explicit categorized failure messages.
 
+The balance and position demos use the shared sync/async callable runner: it
+awaits `Account.get_balances` and `Account.get_positions` in SDK 13.2.3 and also
+supports synchronous implementations, with timeout enforcement, categorized
+errors, and session cleanup.
+
 ### Phase 2 — Market and historical-data references (implemented)
 
 | Script | Status | Command | Inputs | Expected output / failures |
@@ -85,6 +90,16 @@ Phase 2 production restrictions:
 - `TASTYTRADE_ENV` must be `production`.
 - Historical collection uses finite attempt/time budgets and explicit stop reason.
 - Endpoint coverage does **not** claim complete backfill; results remain partial-labeled.
+
+The snapshot demo awaits SDK 13.2.3's async `get_market_data` through the shared
+sync/async callable runner, preserving timeout enforcement, categorized errors,
+and session cleanup. Synchronous implementations are also supported.
+
+The quote-stream demo also awaits async `subscribe` and `unsubscribe` calls.
+Subscription, event collection, and unsubscription each use the configured
+`TASTYTRADE_STREAM_TIMEOUT_SECONDS` budget separately; this is not a single
+overall runtime limit. Unsubscription runs after collection completes, reaches
+the event limit, times out, or fails, before the streamer context closes.
 
 ### Phase 3 — Options and safe order preview (implemented)
 
