@@ -55,6 +55,7 @@ try:
         parse_bool,
         parse_positive_int,
         parse_timeout_seconds,
+        run_callable_with_timeout,
     )
 except ModuleNotFoundError:
     from demo_shared import (
@@ -69,6 +70,7 @@ except ModuleNotFoundError:
         parse_bool,
         parse_positive_int,
         parse_timeout_seconds,
+        run_callable_with_timeout,
     )
 
 
@@ -229,8 +231,10 @@ async def collect_candle_attempt(
     event_limit: int,
     extended_hours: bool,
 ) -> CandleAttemptResult:
-    await asyncio.to_thread(
+    await run_callable_with_timeout(
+        "candle subscription",
         streamer.subscribe_candle,
+        timeout_seconds,
         [symbol],
         interval,
         start_time,
@@ -238,7 +242,14 @@ async def collect_candle_attempt(
     )
 
     async def cleanup() -> None:
-        await asyncio.to_thread(streamer.unsubscribe, Candle, [symbol])
+        await run_callable_with_timeout(
+            "candle unsubscription",
+            streamer.unsubscribe_candle,
+            timeout_seconds,
+            symbol,
+            interval,
+            extended_hours,
+        )
 
     result = await collect_bounded_stream(
         streamer.listen(Candle),

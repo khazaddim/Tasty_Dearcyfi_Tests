@@ -45,7 +45,6 @@ try:
         require_env_var,
         require_selected_account,
         run_callable_with_timeout,
-        run_with_timeout,
     )
 except ModuleNotFoundError:
     from demo_shared import (
@@ -60,7 +59,6 @@ except ModuleNotFoundError:
         require_env_var,
         require_selected_account,
         run_callable_with_timeout,
-        run_with_timeout,
     )
 
 
@@ -93,14 +91,12 @@ async def fetch_value_history() -> int:
         )
         accounts = normalize_account_collection(accounts_raw)
         selected_account = require_selected_account(accounts, config.account_number)
-        history = await run_with_timeout(
+        history = await run_callable_with_timeout(
             "net-liquidating-value history",
-            asyncio.to_thread(
-                selected_account.get_net_liquidating_value_history,
-                session,
-                time_back,
-            ),
+            selected_account.get_net_liquidating_value_history,
             config.timeout_seconds,
+            session,
+            time_back,
         )
 
     print(f"account={mask_account_number(account_number_from_object(selected_account))}")

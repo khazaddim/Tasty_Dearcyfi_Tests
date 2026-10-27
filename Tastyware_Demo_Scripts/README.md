@@ -96,10 +96,31 @@ sync/async callable runner, preserving timeout enforcement, categorized errors,
 and session cleanup. Synchronous implementations are also supported.
 
 The quote-stream demo also awaits async `subscribe` and `unsubscribe` calls.
+Each quote is printed and flushed as soon as it is received, without waiting
+for collection to finish. Each line includes `delta_ms`, the local elapsed
+milliseconds since the previous quote across all subscribed symbols, measured
+with a monotonic clock (not exchange timestamps). The first quote shows `N/A`.
+Each line also prints the feed's `event_time`, `bid_time`, `ask_time`, and
+`time_nano_part` unchanged as raw integers, including any zero values. These
+are separate from local arrival timing; no units or timezone conversions are
+assumed for these raw fields.
+The final summary reports symbols, event count, and
+completion state without repeating the quotes. Collection remains bounded by
+`TASTYTRADE_EVENT_LIMIT` (default 10) and the stream timeout.
+It prints flushed timing checkpoints for individual imports, configuration,
+session creation, streamer connection, subscription, collection, and cleanup.
+The timestamps are elapsed seconds since the script's first timing checkpoint
+setup; differences between consecutive timestamps show where time is spent.
 Subscription, event collection, and unsubscription each use the configured
 `TASTYTRADE_STREAM_TIMEOUT_SECONDS` budget separately; this is not a single
 overall runtime limit. Unsubscription runs after collection completes, reaches
 the event limit, times out, or fails, before the streamer context closes.
+
+Historical candles and account-history requests also use the shared sync/async
+callable runner. Candle cleanup awaits `unsubscribe_candle` with the same symbol,
+interval, and extended-hours setting used for subscription. Candle subscription,
+collection, and unsubscription each have a separate per-attempt timeout budget;
+the overall collection deadline is checked between attempts.
 
 ### Phase 3 — Options and safe order preview (implemented)
 
@@ -108,6 +129,12 @@ the event limit, times out, or fails, before the streamer context closes.
 | `10_option_chain.py` | ✅ implemented | `.\.venv\Scripts\python.exe .\Tastyware_Demo_Scripts\10_option_chain.py` | underlying/expiration/limit optional | Bounded option chain output; explicit unavailable-expiration handling. |
 | `11_stream_option_greeks.py` | ✅ implemented | `.\.venv\Scripts\python.exe .\Tastyware_Demo_Scripts\11_stream_option_greeks.py` | underlying/expiration/contract-limit/event-limit/timeout | Streams bounded Greeks updates using contracts’ actual `streamer_symbol` values; explicit completion state and cleanup. |
 | `12_order_dry_run.py` | ✅ implemented | `.\.venv\Scripts\python.exe .\Tastyware_Demo_Scripts\12_order_dry_run.py` | explicit account/symbol/quantity/Decimal limit price | Displays proposed order and dry-run preview effects. Always calls SDK preview with `dry_run=True`; no live-order option/path exists. |
+
+Option-chain lookup, Greeks subscription/unsubscription, and order preview use
+the shared sync/async callable runner to await SDK 13.2.3 operations with
+categorized errors and bounded waits. Greeks subscription, collection, and
+unsubscription each use a separate stream-timeout budget. Order preview always
+passes `dry_run=True` explicitly.
 
 ## Credential-free validation suite
 

@@ -41,7 +41,7 @@ try:
         managed_async_resource,
         parse_positive_int,
         parse_timeout_seconds,
-        run_with_timeout,
+        run_callable_with_timeout,
     )
 except ModuleNotFoundError:
     from demo_shared import (
@@ -52,7 +52,7 @@ except ModuleNotFoundError:
         managed_async_resource,
         parse_positive_int,
         parse_timeout_seconds,
-        run_with_timeout,
+        run_callable_with_timeout,
     )
 
 
@@ -104,18 +104,32 @@ async def stream_option_greeks() -> int:
 
     session = Session(provider_secret=config.client_secret, refresh_token=config.refresh_token)
     async with managed_async_resource(session):
-        chain = await run_with_timeout(
+        chain = await run_callable_with_timeout(
             "option chain request",
-            asyncio.to_thread(get_option_chain, session, underlying),
+            get_option_chain,
             config.timeout_seconds,
+            session,
+            underlying,
         )
         streamer_symbols = pick_streamer_symbols(chain, expiration, contract_limit)
         streamer = DXLinkStreamer(session)
         async with managed_async_resource(streamer):
-            await asyncio.to_thread(streamer.subscribe, Greeks, streamer_symbols)
+            await run_callable_with_timeout(
+                "Greeks subscription",
+                streamer.subscribe,
+                timeout_seconds,
+                Greeks,
+                streamer_symbols,
+            )
 
             async def cleanup() -> None:
-                await asyncio.to_thread(streamer.unsubscribe, Greeks, streamer_symbols)
+                await run_callable_with_timeout(
+                    "Greeks unsubscription",
+                    streamer.unsubscribe,
+                    timeout_seconds,
+                    Greeks,
+                    streamer_symbols,
+                )
 
             result = await collect_bounded_stream(
                 streamer.listen(Greeks),

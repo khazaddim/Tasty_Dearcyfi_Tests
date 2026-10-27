@@ -1,4 +1,4 @@
-"""Collect bounded quote-stream updates with explicit completion states.
+"""Print quote updates as received with bounded collection and completion states.
 
 Upstream link:
 - <https://tastyworks-api.readthedocs.io/en/latest/data-streamer.html>
@@ -21,12 +21,32 @@ Inputs:
 
 from __future__ import annotations
 
+from time import perf_counter
+
+_START_TIME = perf_counter()
+
+
+def _log_timing(message: str) -> None:
+    print(f"[{perf_counter() - _START_TIME:8.3f}s] {message}", flush=True)
+
+
+_log_timing("Importing asyncio...")
 import asyncio
+from collections.abc import AsyncIterator
+
+_log_timing("Imported asyncio; importing os...")
 import os
 
+_log_timing("Imported os; importing tastytrade.dxfeed.Quote...")
 from tastytrade.dxfeed import Quote
+
+_log_timing("Imported Quote; importing tastytrade.session.Session...")
 from tastytrade.session import Session
+
+_log_timing("Imported Session; importing tastytrade.streamer.DXLinkStreamer...")
 from tastytrade.streamer import DXLinkStreamer
+
+_log_timing("Imported DXLinkStreamer; importing demo_shared helpers...")
 
 try:
     from Tastyware_Demo_Scripts.demo_shared import (
@@ -53,8 +73,11 @@ except ModuleNotFoundError:
         run_callable_with_timeout,
     )
 
+_log_timing("All imports complete.")
+
 
 async def stream_quotes() -> int:
+    _log_timing("Loading runtime configuration...")
     config = load_runtime_config()
     symbols = parse_csv_symbols(os.environ.get("TASTYTRADE_SYMBOLS"), default="SPY")
     event_limit = parse_positive_int(
@@ -67,20 +90,20 @@ async def stream_quotes() -> int:
         default=config.timeout_seconds,
     )
 
+    _log_timing("Configuration loaded; creating Session...")
     session = Session(provider_secret=config.client_secret, refresh_token=config.refresh_token)
+    _log_timing("Session created; entering session context...")
     async with managed_async_resource(session):
+        _log_timing("Session context ready.")
         streamer = await run_streamer(session, symbols, event_limit, stream_timeout)
+        _log_timing("Closing session context...")
+    _log_timing("Session closed; printing summary...")
 
     print(f"symbols={','.join(symbols)}")
     print(f"event_count={len(streamer.events)}")
     print(f"completion_state={streamer.completion_state}")
     if streamer.error is not None:
         print(f"error={streamer.error}")
-    for event in streamer.events:
-        print(
-            f"- symbol={event.event_symbol} bid={event.bid_price} ask={event.ask_price} "
-            f"bid_size={event.bid_size} ask_size={event.ask_size}"
-        )
     return 0
 
 
@@ -90,8 +113,11 @@ async def run_streamer(
     event_limit: int,
     timeout_seconds: float,
 ):
+    _log_timing("Creating DXLinkStreamer...")
     streamer = DXLinkStreamer(session)
+    _log_timing("DXLinkStreamer created; connecting streamer context...")
     async with managed_async_resource(streamer):
+        _log_timing("Streamer connected; subscribing to quotes...")
         await run_callable_with_timeout(
             "quote subscription",
             streamer.subscribe,
@@ -99,8 +125,10 @@ async def run_streamer(
             Quote,
             symbols,
         )
+        _log_timing("Quote subscription complete.")
 
         async def cleanup() -> None:
+            _log_timing("Quote collection ended; unsubscribing...")
             await run_callable_with_timeout(
                 "quote unsubscription",
                 streamer.unsubscribe,
@@ -108,13 +136,42 @@ async def run_streamer(
                 Quote,
                 symbols,
             )
+            _log_timing("Quote unsubscription complete.")
 
+        async def live_quotes() -> AsyncIterator[Quote]:
+            previous_received_at: float | None = None
+            async for event in streamer.listen(Quote):
+                received_at = perf_counter()
+                delta_ms = (
+                    "N/A" if previous_received_at is None
+                    else f"{(received_at - previous_received_at) * 1000:.3f}"
+                )
+                previous_received_at = received_at
+                print(
+                    f"- symbol={event.event_symbol} bid={event.bid_price} ask={event.ask_price} "
+                    f"bid_size={event.bid_size} ask_size={event.ask_size} "
+                    f"event_time={event.event_time} bid_time={event.bid_time} "
+                    f"ask_time={event.ask_time} time_nano_part={event.time_nano_part} "
+                    f"delta_ms={delta_ms}",
+                    flush=True,
+                )
+                yield event
+
+        _log_timing(
+            f"Collecting up to {event_limit} quote events "
+            f"(collection timeout={timeout_seconds:g}s)..."
+        )
         result = await collect_bounded_stream(
-            streamer.listen(Quote),
+            live_quotes(),
             event_limit=event_limit,
             timeout_seconds=timeout_seconds,
             cleanup=cleanup,
         )
+        _log_timing(
+            f"Collection finished: {len(result.events)} events, "
+            f"state={result.completion_state}; closing streamer context..."
+        )
+    _log_timing("Streamer context closed.")
     return result
 
 

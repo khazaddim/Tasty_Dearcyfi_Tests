@@ -25,6 +25,7 @@ SCRIPT_05 = importlib.import_module("Tastyware_Demo_Scripts.05_market_data_snaps
 SCRIPT_06 = importlib.import_module("Tastyware_Demo_Scripts.06_stream_quotes")
 SCRIPT_07 = importlib.import_module("Tastyware_Demo_Scripts.07_historical_candles")
 SCRIPT_08 = importlib.import_module("Tastyware_Demo_Scripts.08_account_transaction_history")
+SCRIPT_09 = importlib.import_module("Tastyware_Demo_Scripts.09_account_value_history")
 
 
 class Phase2SnapshotTest(unittest.TestCase):
@@ -137,7 +138,20 @@ class Phase2QuoteStreamerTest(unittest.IsolatedAsyncioTestCase):
         self.streamer.__aenter__.return_value = self.streamer
         self.streamer.subscribe = AsyncMock()
         self.streamer.unsubscribe = AsyncMock()
-        self.events = [object(), object()]
+        self.events = [
+            SimpleNamespace(
+                event_symbol="SPY",
+                bid_price=100 + index,
+                ask_price=101 + index,
+                bid_size=10,
+                ask_size=20,
+                event_time=0,
+                bid_time=1793066400000 + index * 100,
+                ask_time=1793066400000 + index * 125,
+                time_nano_part=index * 123456,
+            )
+            for index in range(2)
+        ]
 
         async def quotes():
             for event in self.events:
@@ -151,6 +165,113 @@ class Phase2QuoteStreamerTest(unittest.IsolatedAsyncioTestCase):
     def assert_cleanup(self) -> None:
         self.streamer.unsubscribe.assert_awaited_once_with(SCRIPT_06.Quote, ["SPY"])
         self.streamer.__aexit__.assert_awaited_once()
+
+    def test_timing_output_is_elapsed_and_flushed(self) -> None:
+        with (
+            patch.object(SCRIPT_06, "_START_TIME", 100.0),
+            patch.object(SCRIPT_06, "perf_counter", return_value=101.25),
+            patch("builtins.print") as output,
+        ):
+            SCRIPT_06._log_timing("Test checkpoint")
+        output.assert_called_once_with(
+            "[   1.250s] Test checkpoint", flush=True
+        )
+
+    async def test_reports_stream_timing_checkpoints_in_order(self) -> None:
+        with patch.object(SCRIPT_06, "_log_timing") as timing:
+            await SCRIPT_06.run_streamer(self.session, ["SPY"], 1, 1.0)
+        self.assertEqual(
+            [call.args[0] for call in timing.call_args_list],
+            [
+                "Creating DXLinkStreamer...",
+                "DXLinkStreamer created; connecting streamer context...",
+                "Streamer connected; subscribing to quotes...",
+                "Quote subscription complete.",
+                "Collecting up to 1 quote events (collection timeout=1s)...",
+                "Quote collection ended; unsubscribing...",
+                "Quote unsubscription complete.",
+                "Collection finished: 1 events, state=event_limit; closing streamer context...",
+                "Streamer context closed.",
+            ],
+        )
+        self.assert_cleanup()
+
+    async def test_prints_each_quote_before_requesting_the_next(self) -> None:
+        with (
+            patch("builtins.print") as output,
+            patch.object(SCRIPT_06, "_log_timing"),
+            patch.object(SCRIPT_06, "perf_counter", side_effect=[100.0, 100.125]),
+        ):
+            async def quotes():
+                for index, event in enumerate(self.events):
+                    yield event
+                    delta_ms = "N/A" if index == 0 else "125.000"
+                    output.assert_any_call(
+                        f"- symbol=SPY bid={100 + index} ask={101 + index} "
+                        "bid_size=10 ask_size=20 event_time=0 "
+                        f"bid_time={1793066400000 + index * 100} "
+                        f"ask_time={1793066400000 + index * 125} "
+                        f"time_nano_part={index * 123456} delta_ms={delta_ms}",
+                        flush=True,
+                    )
+                    self.streamer.unsubscribe.assert_not_awaited()
+
+            self.streamer.listen.side_effect = lambda _event_class: quotes()
+            result = await SCRIPT_06.run_streamer(self.session, ["SPY"], 10, 1.0)
+        self.assertEqual(result.events, self.events)
+        self.assertEqual(result.completion_state, "stream_complete")
+        self.assert_cleanup()
+
+    async def test_quote_deltas_track_consecutive_arrivals_across_symbols(self) -> None:
+        self.events.extend([
+            SimpleNamespace(
+                event_symbol="QQQ", bid_price=200, ask_price=201,
+                bid_size=10, ask_size=20,
+                event_time=0, bid_time=1793066402500,
+                ask_time=1793066402600, time_nano_part=654321,
+            ),
+            self.events[0],
+        ])
+        with (
+            patch("builtins.print") as output,
+            patch.object(SCRIPT_06, "_log_timing"),
+            patch.object(
+                SCRIPT_06, "perf_counter",
+                side_effect=[100.0, 100.125, 102.625, 102.625],
+            ),
+        ):
+            result = await SCRIPT_06.run_streamer(self.session, ["SPY"], 10, 1.0)
+        self.assertEqual(
+            [call.args[0].split("delta_ms=")[1] for call in output.call_args_list],
+            ["N/A", "125.000", "2500.000", "0.000"],
+        )
+        self.assertEqual(result.events, self.events)
+        self.assert_cleanup()
+
+    async def test_final_summary_does_not_repeat_live_quotes(self) -> None:
+        self.session.aclose = AsyncMock()
+        config = SimpleNamespace(
+            client_secret="test-secret", refresh_token="test-token", timeout_seconds=1.0
+        )
+        with (
+            patch.object(SCRIPT_06, "load_runtime_config", return_value=config),
+            patch.object(SCRIPT_06, "Session", return_value=self.session),
+            patch.dict(os.environ, {
+                "TASTYTRADE_SYMBOLS": "SPY",
+                "TASTYTRADE_EVENT_LIMIT": "2",
+                "TASTYTRADE_STREAM_TIMEOUT_SECONDS": "1",
+            }),
+            patch("builtins.print") as output,
+        ):
+            exit_code = await SCRIPT_06.stream_quotes()
+        lines = [call.args[0] for call in output.call_args_list]
+        quote_lines = [line for line in lines if line.startswith("- symbol=")]
+        self.assertEqual(len(quote_lines), 2)
+        self.assertLess(lines.index(quote_lines[-1]), lines.index("event_count=2"))
+        self.assertIn("completion_state=event_limit", lines)
+        self.assertEqual(exit_code, 0)
+        self.session.aclose.assert_awaited_once_with()
+        self.assert_cleanup()
 
     async def test_awaits_subscription_and_cleanup_at_event_limit(self) -> None:
         result = await SCRIPT_06.run_streamer(self.session, ["SPY"], 1, 1.0)
@@ -353,6 +474,38 @@ class Phase2RetryBehaviorTest(unittest.IsolatedAsyncioTestCase):
 
 
 class Phase2PaginationTest(unittest.IsolatedAsyncioTestCase):
+    async def test_awaits_async_history_pages_with_date_filters(self) -> None:
+        lookup = AsyncMock(side_effect=[[1, 2], [3]])
+        session = Mock()
+        start, end = date(2026, 10, 1), date(2026, 10, 2)
+        rows, pages = await SCRIPT_08.fetch_history_pages(
+            selected_account=SimpleNamespace(get_history=lookup),
+            session=session,
+            start_date=start,
+            end_date=end,
+            per_page=2,
+            timeout_seconds=1.0,
+        )
+        self.assertEqual((rows, pages), ([1, 2, 3], 2))
+        self.assertEqual(
+            [call.args for call in lookup.await_args_list],
+            [
+                (session, 2, offset, "Desc", None, None, None, start, end)
+                for offset in (0, 2)
+            ],
+        )
+
+    async def test_classifies_async_history_failure(self) -> None:
+        with self.assertRaises(DemoNetworkError):
+            await SCRIPT_08.fetch_history_pages(
+                selected_account=SimpleNamespace(get_history=AsyncMock(side_effect=OSError())),
+                session=Mock(),
+                start_date=date(2026, 10, 1),
+                end_date=date(2026, 10, 2),
+                per_page=2,
+                timeout_seconds=1.0,
+            )
+
     async def test_fetch_history_pages_handles_pagination(self) -> None:
         calls: list[int] = []
 
@@ -374,6 +527,88 @@ class Phase2PaginationTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(rows, [1, 2, 3])
         self.assertEqual(pages, 2)
         self.assertEqual(calls, [0, 2])
+
+
+class Phase2CandleSubscriptionTest(unittest.IsolatedAsyncioTestCase):
+    async def test_awaits_candle_subscription_and_matching_cleanup(self) -> None:
+        for extended_hours in (False, True):
+            with self.subTest(extended_hours=extended_hours):
+                streamer = Mock(subscribe_candle=AsyncMock(), unsubscribe_candle=AsyncMock())
+                candle = SimpleNamespace(
+                    time=0, open=1, high=2, low=1, close=2, volume=10,
+                )
+
+                async def candles():
+                    yield candle
+
+                streamer.listen.return_value = candles()
+                start = datetime(2026, 10, 1, tzinfo=UTC)
+                result = await SCRIPT_07.collect_candle_attempt(
+                    streamer=streamer, symbol="SPY", interval="5m",
+                    start_time=start, timeout_seconds=1.0,
+                    event_limit=1, extended_hours=extended_hours,
+                )
+                streamer.subscribe_candle.assert_awaited_once_with(
+                    ["SPY"], "5m", start, extended_hours,
+                )
+                streamer.unsubscribe_candle.assert_awaited_once_with("SPY", "5m", extended_hours)
+                self.assertEqual(result.completion_state, "event_limit")
+                self.assertEqual(result.rows[0]["close"], 2)
+
+    async def test_candle_cleanup_on_collection_timeout_or_failure(self) -> None:
+        for failure in (False, True):
+            with self.subTest(failure=failure):
+                streamer = Mock(subscribe_candle=AsyncMock(), unsubscribe_candle=AsyncMock())
+
+                async def candles():
+                    if failure:
+                        raise OSError("connection failed")
+                    await asyncio.sleep(60)
+                    yield object()
+
+                streamer.listen.return_value = candles()
+                result = await SCRIPT_07.collect_candle_attempt(
+                    streamer=streamer, symbol="SPY", interval="5m",
+                    start_time=datetime(2026, 10, 1, tzinfo=UTC),
+                    timeout_seconds=0.01, event_limit=1, extended_hours=False,
+                )
+                self.assertEqual(result.completion_state, "failed" if failure else "timeout")
+                streamer.unsubscribe_candle.assert_awaited_once_with("SPY", "5m", False)
+
+
+class Phase2ValueHistoryTest(unittest.IsolatedAsyncioTestCase):
+    async def test_awaits_value_history_and_closes_session(self) -> None:
+        for failure in (False, True):
+            with self.subTest(failure=failure):
+                session = SimpleNamespace(aclose=AsyncMock())
+                lookup = AsyncMock(return_value=[SimpleNamespace(time="today", close="100")])
+                if failure:
+                    lookup.side_effect = OSError("connection failed")
+                account = SimpleNamespace(
+                    account_number="ABC12345", get_net_liquidating_value_history=lookup,
+                )
+                config = load_runtime_config({
+                    "Tasty_SECRET": "test", "Tasty_Refresh": "test",
+                    "TASTYTRADE_ENV": "production",
+                })
+                output = StringIO()
+                with (
+                    patch.object(SCRIPT_09, "load_runtime_config", return_value=config),
+                    patch.object(SCRIPT_09, "Session", return_value=session),
+                    patch.object(SCRIPT_09.Account, "get", AsyncMock(return_value=[account])),
+                    patch.dict(os.environ, {
+                        "TASTYTRADE_TIME_BACK": "1m", "TASTYTRADE_EXPORT_CSV": "false",
+                    }),
+                    patch("sys.stdout", output),
+                ):
+                    self.assertEqual(await SCRIPT_09.main(), 1 if failure else 0)
+                lookup.assert_awaited_once_with(session, "1m")
+                session.aclose.assert_awaited_once_with()
+                self.assertNotIn("ABC12345", output.getvalue())
+                self.assertIn(
+                    "network transport error" if failure else "- timestamp=today value=100",
+                    output.getvalue(),
+                )
 
 
 if __name__ == "__main__":

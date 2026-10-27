@@ -36,7 +36,7 @@ try:
         load_runtime_config,
         managed_async_resource,
         parse_positive_int,
-        run_with_timeout,
+        run_callable_with_timeout,
     )
 except ModuleNotFoundError:
     from demo_shared import (
@@ -45,7 +45,7 @@ except ModuleNotFoundError:
         load_runtime_config,
         managed_async_resource,
         parse_positive_int,
-        run_with_timeout,
+        run_callable_with_timeout,
     )
 
 
@@ -70,10 +70,12 @@ async def show_option_chain() -> int:
 
     session = Session(provider_secret=config.client_secret, refresh_token=config.refresh_token)
     async with managed_async_resource(session):
-        chain = await run_with_timeout(
+        chain = await run_callable_with_timeout(
             "option chain request",
-            asyncio.to_thread(get_option_chain, session, underlying),
+            get_option_chain,
             config.timeout_seconds,
+            session,
+            underlying,
         )
 
     if expiration is not None:

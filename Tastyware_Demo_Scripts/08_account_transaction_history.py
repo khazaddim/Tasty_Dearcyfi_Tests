@@ -42,7 +42,6 @@ try:
         parse_positive_int,
         require_selected_account,
         run_callable_with_timeout,
-        run_with_timeout,
     )
 except ModuleNotFoundError:
     from demo_shared import (
@@ -56,7 +55,6 @@ except ModuleNotFoundError:
         parse_positive_int,
         require_selected_account,
         run_callable_with_timeout,
-        run_with_timeout,
     )
 
 
@@ -131,21 +129,19 @@ async def fetch_history_pages(
     transactions: list[object] = []
     while True:
         page_count += 1
-        page = await run_with_timeout(
+        page = await run_callable_with_timeout(
             f"transaction history page {page_count}",
-            asyncio.to_thread(
-                selected_account.get_history,
-                session,
-                per_page,
-                page_offset,
-                "Desc",
-                None,
-                None,
-                None,
-                start_date,
-                end_date,
-            ),
+            selected_account.get_history,
             timeout_seconds,
+            session,
+            per_page,
+            page_offset,
+            "Desc",
+            None,
+            None,
+            None,
+            start_date,
+            end_date,
         )
         transactions.extend(page)
         if len(page) < per_page:

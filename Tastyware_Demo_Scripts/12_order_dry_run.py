@@ -51,7 +51,6 @@ try:
         require_env_var,
         require_selected_account,
         run_callable_with_timeout,
-        run_with_timeout,
     )
 except ModuleNotFoundError:
     from demo_shared import (
@@ -67,7 +66,6 @@ except ModuleNotFoundError:
         require_env_var,
         require_selected_account,
         run_callable_with_timeout,
-        run_with_timeout,
     )
 
 
@@ -124,10 +122,13 @@ async def preview_dry_run_order(
             )
         ],
     )
-    return await run_with_timeout(
+    return await run_callable_with_timeout(
         "dry-run order preview",
-        asyncio.to_thread(selected_account.place_order, session, order, True),
+        selected_account.place_order,
         timeout_seconds,
+        session,
+        order,
+        dry_run=True,
     )
 
 
