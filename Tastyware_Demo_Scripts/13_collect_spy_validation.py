@@ -66,10 +66,12 @@ class SessionCollector:
         self.next_universe = window.opens
         self.next_candles = window.opens
         self.closing_requested = False
+        self.stage = "initializing"
 
     async def request(
         self, operation: str, symbols: list[str], action: Callable[[], Awaitable[T]],
     ) -> T:
+        self.stage = operation
         start = utc_now()
         try:
             remaining = (
@@ -110,12 +112,25 @@ class SessionCollector:
             await asyncio.sleep(0.1)
 
     async def refresh_universe(self, session: Session, streamer: RawMarketStreamer) -> None:
+        self.stage = "waiting_for_spy_quote"
         deadline = monotonic() + self.config.request_timeout
         while True:
             now = utc_now()
             spot = self.state.latest.get(("Quote", "SPY"))
             mid, _, flags = quote_quality(spot, now, self.config.quote_age)
-            if mid is not None and mid > 0 and not flags:
+            unknown_times = {"bid_time.unknown", "ask_time.unknown"}
+            receipt_age = (now - spot.received_at).total_seconds() if spot else math.inf
+            if (
+                spot is not None and mid is not None and mid > 0 and not (set(flags) - unknown_times)
+                and 0 <= receipt_age <= self.config.quote_age
+            ):
+                if flags:
+                    self.state.diagnostic("universe_source_time_unknown", "SPY", {
+                        "source_time_flags": flags, "received_at": spot.received_at,
+                        "receipt_age_seconds": receipt_age,
+                        "use": "universe selection only; strict sample quality is unchanged",
+                    })
+                    log("SPY source timestamps unavailable; using receipt-fresh quote for universe selection only.")
                 break
             if monotonic() >= deadline:
                 raise TimeoutError("No fresh two-sided SPY quote for universe selection.")
@@ -206,6 +221,7 @@ class SessionCollector:
         )
         self.closing_requested = False
         while utc_now() < deadline:
+            self.stage = "monitoring_market_data"
             now, tick = utc_now(), monotonic()
             if not streamer.channels_active(include_greeks=bool(self.instruments)):
                 raise TimeoutError("A required DXLink channel closed; resubscription is required.")
@@ -249,9 +265,11 @@ class SessionCollector:
         )
         while utc_now() < deadline:
             try:
+                self.stage = "session_authentication"
                 async with Session(
                     provider_secret=runtime.client_secret, refresh_token=runtime.refresh_token,
                 ) as session:
+                    self.stage = "streamer_connection"
                     # Keep entry/exit in the same task as the SDK's AnyIO scopes.
                     with fail_after(min(
                         self.config.request_timeout, max(0, (deadline - utc_now()).total_seconds()),
@@ -273,6 +291,7 @@ class SessionCollector:
                 failures += 1
                 self.state.diagnostic("connection_gap", "", {
                     "attempt": failures, "error_types": [type(error).__name__ for error in errors],
+                    "stage": self.stage,
                     "received_counts": dict(self.state.counts),
                     "last_received_at": self.state.last_received,
                 })
@@ -280,7 +299,9 @@ class SessionCollector:
                 self.state.reset_connection()
                 if failures > self.config.reconnect_attempts:
                     raise DemoHelperError("Reconnect budget exhausted; partial data retained.") from None
-                log(f"Connection failed; retry {failures}/{self.config.reconnect_attempts}.")
+                error_types = ",".join(type(error).__name__ for error in errors)
+                log(f"Collection failed at {self.stage} ({error_types}); "
+                    f"retry {failures}/{self.config.reconnect_attempts}.")
                 await asyncio.sleep(min(2 ** failures, 30, max(0, (deadline - utc_now()).total_seconds())))
         raise DemoHelperError("Session/reconciliation deadline reached during recovery; partial data retained.")
 

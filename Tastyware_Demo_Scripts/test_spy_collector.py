@@ -372,6 +372,42 @@ os._exit(0)
 
 
 class RunnerTests(unittest.IsolatedAsyncioTestCase):
+    async def test_universe_accepts_recent_receipt_with_unknown_source_times(self) -> None:
+        collector = RUNNER.SessionCollector(CollectorConfig(), WINDOW, MagicMock())
+        quote = event(bid_time=0, ask_time=0)
+        collector.state.receive(quote)
+        with (
+            patch.object(RUNNER, "utc_now", return_value=NOW),
+            patch.object(RUNNER, "get_option_chain", AsyncMock(return_value={})),
+            patch.object(RUNNER, "select_universe", return_value=([], {})) as select,
+            patch.object(RUNNER, "log"),
+        ):
+            await collector.refresh_universe(MagicMock(), MagicMock())
+        self.assertEqual(select.call_args.args[1], 101)
+        self.assertIn("universe_source_time_unknown", [row[0] for row in collector.state.diagnostics])
+        self.assertEqual(quote_quality(quote, NOW, 5)[2], ["bid_time.unknown", "ask_time.unknown"])
+        self.assertIsNone(quote.timestamp)
+
+    async def test_universe_rejects_bad_or_stale_quotes(self) -> None:
+        for changes in (
+            {"bid_time": 0, "ask_time": 0, "bid_price": "NaN"},
+            {"bid_time": 0, "ask_time": 0, "bid_price": "103"},
+            {"bid_time": 0, "ask_time": 0, "at": NOW - timedelta(seconds=6)},
+            {"bid_time": 0, "ask_time": 0, "at": NOW + timedelta(seconds=1)},
+            {"bid_time": int((NOW - timedelta(seconds=6)).timestamp() * 1000)},
+        ):
+            with self.subTest(changes=changes):
+                collector = RUNNER.SessionCollector(CollectorConfig(), WINDOW, MagicMock())
+                collector.state.receive(event(**changes))
+                with (
+                    patch.object(RUNNER, "utc_now", return_value=NOW),
+                    patch.object(RUNNER, "monotonic", side_effect=[0, 31]),
+                    patch.object(RUNNER, "get_option_chain", AsyncMock()) as chain,
+                ):
+                    with self.assertRaises(TimeoutError):
+                        await collector.refresh_universe(MagicMock(), MagicMock())
+                chain.assert_not_awaited()
+
     async def test_preopen_wait_then_collect_only_today(self) -> None:
         config = CollectorConfig()
         store = MagicMock()

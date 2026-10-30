@@ -234,6 +234,13 @@ cap is 96 options. An expansion exceeding that cap is rejected and diagnosed,
 not silently truncated. Actual expirations, selected/rejected counts, selection
 spot and effective universe revisions are stored.
 
+If the feed omits SPY bid/ask source timestamps (zero values), universe selection
+may use an otherwise valid quote received within `--quote-age` seconds. This is
+explicitly logged and diagnosed; it does not replace source timestamps or relax
+sample eligibility or option/underlying source-time alignment. Such samples
+remain flagged and cannot support strict source-time-aligned validation.
+Retries report the failing stage and sanitized exception types, not API secrets.
+
 Relevant flags (`--help` lists all):
 
 | Flag | Default | Meaning |
