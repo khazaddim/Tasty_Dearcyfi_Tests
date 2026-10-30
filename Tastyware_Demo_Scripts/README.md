@@ -211,8 +211,13 @@ full-session pilot was run as part of implementation.
 - Ctrl+C closes the database and marks the run interrupted.
 
 Default database: `Tastyware_Demo_Scripts\exports\spy_validation.duckdb`.
-Use `--database <path.duckdb>` to change it. The database, WAL and exports are
-Git-ignored. Only one collector may write a database at once.
+Use `--database <path.duckdb>` to change it. DuckDB databases, their WAL/temp
+files, and Parquet files are Git-ignored throughout this repository. Keep export
+directories under `Tastyware_Demo_Scripts\exports\` so their JSON manifests and
+any other generated files are ignored too. For custom paths elsewhere, add an
+ignore rule before collecting/exporting. Ignore rules do not protect files
+already tracked by Git or prevent `git add -f`, and do not apply in other repos.
+Only one collector may write a database at once.
 
 ### Sampling and quality configuration
 

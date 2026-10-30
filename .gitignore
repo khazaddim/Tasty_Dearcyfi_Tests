@@ -232,3 +232,4 @@ Tastyware_Demo_Scripts/exports/
 *.duckdb
 *.duckdb.wal
 *.duckdb.tmp/
+*.parquet
