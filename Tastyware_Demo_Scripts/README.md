@@ -243,8 +243,20 @@ Retries report the failing stage and sanitized exception types, not API secrets.
 
 Relevant flags (`--help` lists all):
 
+Add `--verbose` to your collection command for request/subscription progress and
+feed heartbeats approximately every five seconds once universe setup completes.
+Heartbeats show cumulative Quote/Trade/Greeks/Candle receipt counts, new events
+since the previous report, time since the last event, cached quote count and
+source-timestamp availability. Zero new events remain visible; blocking setup
+requests can delay heartbeats. Buffer commit messages confirm candle/diagnostic
+transactions; the normal minute messages confirm sampled quote writes.
+Receipt counts are not database row counts or proof of validation eligibility.
+Verbose mode does not enable SDK debug logging or print credentials/raw payloads,
+and does not change subscription, sampling or persistence behavior.
+
 | Flag | Default | Meaning |
 |---|---|---|
+| `--verbose` | off | Safe feed heartbeats, request progress and buffer commit confirmations |
 | `--sample-seconds` | 60 | Nominal cadence, anchored to today's open |
 | `--quote-age` | 5 | Maximum age of both bid and ask, seconds |
 | `--analytics-age` | 15 | Maximum analytics source age, seconds |

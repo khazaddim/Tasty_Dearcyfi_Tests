@@ -372,6 +372,43 @@ os._exit(0)
 
 
 class RunnerTests(unittest.IsolatedAsyncioTestCase):
+    def test_verbose_flag_is_opt_in(self) -> None:
+        self.assertFalse(RUNNER.parse_arguments([])[1].verbose)
+        self.assertTrue(RUNNER.parse_arguments(["--verbose"])[1].verbose)
+        collector = RUNNER.SessionCollector(CollectorConfig(), WINDOW, MagicMock())
+        with patch.object(RUNNER, "log") as output:
+            collector.report_feed(NOW)
+            collector.verbose_log("hidden")
+        output.assert_not_called()
+
+    def test_verbose_feed_reports_receipts_idle_and_unknown_source_times(self) -> None:
+        collector = RUNNER.SessionCollector(replace(CollectorConfig(), verbose=True), WINDOW, MagicMock())
+        with patch.object(RUNNER, "log") as output:
+            collector.report_feed(NOW)
+            self.assertIn("last_event_age=never", output.call_args.args[0])
+            collector.state.receive(event(bid_time=0, ask_time=0, private_payload="do-not-print"))
+            collector.state.receive(event("Greeks", "OPT"))
+            collector.report_feed(NOW)
+            text = output.call_args.args[0]
+            self.assertIn("'Quote': 1", text)
+            self.assertIn("'Greeks': 1", text)
+            self.assertIn("source_timestamp_known=0/1", text)
+            self.assertIn("last_event_age=0.0s", text)
+            collector.report_feed(NOW + timedelta(seconds=5))
+            self.assertIn("new_since_report={'Quote': 0, 'Trade': 0, 'Greeks': 0, 'Candle': 0}", output.call_args.args[0])
+            self.assertIn("last_event_age=5.0s", output.call_args.args[0])
+            self.assertNotIn("do-not-print", str(output.call_args_list))
+
+    def test_verbose_never_claims_commit_when_flush_fails(self) -> None:
+        store = MagicMock()
+        store.flush.side_effect = OSError("private-error")
+        collector = RUNNER.SessionCollector(replace(CollectorConfig(), verbose=True), WINDOW, store)
+        collector.state.receive(event("Candle"))
+        with patch.object(RUNNER, "log") as output:
+            with self.assertRaises(OSError):
+                collector.flush()
+        output.assert_not_called()
+
     async def test_universe_accepts_recent_receipt_with_unknown_source_times(self) -> None:
         collector = RUNNER.SessionCollector(CollectorConfig(), WINDOW, MagicMock())
         quote = event(bid_time=0, ask_time=0)
@@ -538,6 +575,7 @@ class RunnerTests(unittest.IsolatedAsyncioTestCase):
                 CollectorConfig(), database=Path(directory) / "loop.duckdb",
                 delay_status="realtime", clock_offset_ms=0, candle_grace=1,
                 reconciliation_seconds=2, candle_refresh_seconds=60,
+                verbose=True,
             )
             window = SessionWindow(NOW.date(), NOW, NOW + timedelta(minutes=2))
             store = CollectorStore(config)
@@ -547,6 +585,7 @@ class RunnerTests(unittest.IsolatedAsyncioTestCase):
                 instrument = Instrument("OPTION", "OPT", "P", 100, NOW.date() + timedelta(days=17))
                 wall = [NOW]
                 overlaps = []
+                messages = []
 
                 def feed() -> None:
                     collector.state.receive(event(at=wall[0]))
@@ -575,7 +614,7 @@ class RunnerTests(unittest.IsolatedAsyncioTestCase):
                     patch.object(RUNNER, "utc_now", side_effect=lambda: wall[0]),
                     patch.object(RUNNER, "monotonic", side_effect=lambda: (wall[0] - NOW).total_seconds()),
                     patch.object(RUNNER.asyncio, "sleep", side_effect=sleep),
-                    patch.object(RUNNER, "log"),
+                    patch.object(RUNNER, "log", side_effect=lambda text: messages.append((wall[0], text))),
                     patch.object(collector, "subscribe", side_effect=subscribe),
                     patch.object(collector, "refresh_universe", side_effect=universe),
                     patch.object(collector, "candle_overlap", side_effect=overlap),
@@ -587,6 +626,13 @@ class RunnerTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(overlaps, [False, True])
                 self.assertTrue(collector.closing_requested)
                 self.assertGreaterEqual(wall[0], window.closes)
+                heartbeats = [at for at, text in messages if "Feed received_total=" in text]
+                self.assertGreaterEqual(len(heartbeats), 24)
+                self.assertTrue(all(
+                    (later - earlier).total_seconds() >= 5
+                    for earlier, later in zip(heartbeats, heartbeats[1:])
+                ))
+                self.assertTrue(any("Database buffers committed: candle_revisions=1" in text for _, text in messages))
             finally:
                 store.close()
 

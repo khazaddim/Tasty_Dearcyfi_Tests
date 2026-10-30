@@ -94,6 +94,7 @@ class CollectorConfig:
     max_pending: int = 50_000
     delay_status: str = "unknown"
     clock_offset_ms: float | None = None
+    verbose: bool = False
 
     def validate(self) -> None:
         for name in (

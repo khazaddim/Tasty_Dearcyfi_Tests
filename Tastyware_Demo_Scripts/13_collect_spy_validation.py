@@ -32,7 +32,7 @@ try:
         CaptureState, CollectorConfig, Instrument, RawMarketStreamer, SessionWindow,
         current_session, json_text, quote_quality, select_universe, utc_now,
     )
-    from Tastyware_Demo_Scripts.collector_store import CollectorStore, StorageLimitReached, export_database
+    from Tastyware_Demo_Scripts.collector_store import CollectorStore, StorageLimitReached, database_bytes, export_database
     from Tastyware_Demo_Scripts.demo_shared import (
         DemoHelperError, classify_failure, load_runtime_config,
     )
@@ -41,7 +41,7 @@ except ModuleNotFoundError:
         CaptureState, CollectorConfig, Instrument, RawMarketStreamer, SessionWindow,
         current_session, json_text, quote_quality, select_universe, utc_now,
     )
-    from collector_store import CollectorStore, StorageLimitReached, export_database
+    from collector_store import CollectorStore, StorageLimitReached, database_bytes, export_database
     from demo_shared import DemoHelperError, classify_failure, load_runtime_config
 
 T = TypeVar("T")
@@ -67,11 +67,45 @@ class SessionCollector:
         self.next_candles = window.opens
         self.closing_requested = False
         self.stage = "initializing"
+        self.reported_counts: dict[str, int] = {}
+
+    def verbose_log(self, message: str) -> None:
+        if self.config.verbose:
+            log(f"[verbose] {message}")
+
+    def report_feed(self, now: datetime) -> None:
+        if not self.config.verbose:
+            return
+        kinds = ("Quote", "Trade", "Greeks", "Candle")
+        counts = {kind: self.state.counts[kind] for kind in kinds}
+        added = {kind: counts[kind] - self.reported_counts.get(kind, 0) for kind in kinds}
+        age = (
+            f"{(now - self.state.last_received).total_seconds():.1f}s"
+            if self.state.last_received is not None else "never"
+        )
+        quotes = [observation for (kind, _), observation in self.state.latest.items() if kind == "Quote"]
+        timestamped = sum(quote.timestamp is not None for quote in quotes)
+        self.verbose_log(
+            f"Feed received_total={counts}; new_since_report={added}; last_event_age={age}; "
+            f"cached_quotes={len(quotes)}; source_timestamp_known={timestamped}/{len(quotes)}. "
+            "Receipt counts are not persisted-row counts or validation eligibility."
+        )
+        self.reported_counts = counts
+
+    def flush(self) -> None:
+        candles, diagnostics = len(self.state.candles), len(self.state.diagnostics)
+        self.store.flush(self.state)
+        if self.config.verbose and (candles or diagnostics):
+            self.verbose_log(
+                f"Database buffers committed: candle_revisions={candles}; diagnostics={diagnostics}; "
+                f"database_plus_wal_bytes={database_bytes(self.config.database)}."
+            )
 
     async def request(
         self, operation: str, symbols: list[str], action: Callable[[], Awaitable[T]],
     ) -> T:
         self.stage = operation
+        self.verbose_log(f"Request starting: {operation}; symbols={len(symbols)}.")
         start = utc_now()
         try:
             remaining = (
@@ -93,6 +127,10 @@ class SessionCollector:
         self.store.request(operation, start, symbols, "sent_or_returned", {
             "note": "Subscription send is not proof every instrument received data.",
         })
+        self.verbose_log(
+            f"Request returned: {operation}; elapsed_seconds={(utc_now() - start).total_seconds():.3f}. "
+            "Subscription send does not confirm data receipt."
+        )
         return result
 
     async def subscribe(self, streamer: RawMarketStreamer, symbols: list[str]) -> None:
@@ -113,6 +151,7 @@ class SessionCollector:
 
     async def refresh_universe(self, session: Session, streamer: RawMarketStreamer) -> None:
         self.stage = "waiting_for_spy_quote"
+        self.verbose_log("Waiting for a usable SPY quote to select options.")
         deadline = monotonic() + self.config.request_timeout
         while True:
             now = utc_now()
@@ -215,6 +254,7 @@ class SessionCollector:
         self.next_candles = utc_now() + timedelta(seconds=self.config.candle_refresh_seconds)
         flush_at = monotonic() + self.config.flush_seconds
         checkpoint_at = monotonic() + 60
+        report_at = monotonic()
         previous_wall, previous_mono = utc_now(), monotonic()
         deadline = self.window.closes + timedelta(
             seconds=self.config.candle_grace + self.config.reconciliation_seconds,
@@ -231,8 +271,11 @@ class SessionCollector:
             previous_wall, previous_mono = now, tick
             self.record_due_samples(now)
             if tick >= flush_at:
-                self.store.flush(self.state)
+                self.flush()
                 flush_at = tick + self.config.flush_seconds
+            if self.config.verbose and tick >= report_at:
+                self.report_feed(now)
+                report_at = tick + 5
             if tick >= checkpoint_at:
                 self.store.checkpoint()
                 checkpoint_at = tick + 60
@@ -250,7 +293,7 @@ class SessionCollector:
                     await self.candle_overlap(streamer, closing=True)
                     self.closing_requested = True
             await asyncio.sleep(0.25)
-        self.store.flush(self.state)
+        self.flush()
 
     async def collect(self) -> None:
         self.store.universe([Instrument("SPY", "SPY", reference={
@@ -266,15 +309,18 @@ class SessionCollector:
         while utc_now() < deadline:
             try:
                 self.stage = "session_authentication"
+                self.verbose_log("Opening authenticated session.")
                 async with Session(
                     provider_secret=runtime.client_secret, refresh_token=runtime.refresh_token,
                 ) as session:
                     self.stage = "streamer_connection"
+                    self.verbose_log("Connecting DXLink market-data streamer.")
                     # Keep entry/exit in the same task as the SDK's AnyIO scopes.
                     with fail_after(min(
                         self.config.request_timeout, max(0, (deadline - utc_now()).total_seconds()),
                     )) as scope:
                         async with RawMarketStreamer(session, self.state.receive) as streamer:
+                            self.verbose_log("DXLink connected; starting subscriptions.")
                             scope.deadline = math.inf
                             try:
                                 await self.connected(session, streamer)
@@ -295,7 +341,7 @@ class SessionCollector:
                     "received_counts": dict(self.state.counts),
                     "last_received_at": self.state.last_received,
                 })
-                self.store.flush(self.state)
+                self.flush()
                 self.state.reset_connection()
                 if failures > self.config.reconnect_attempts:
                     raise DemoHelperError("Reconnect budget exhausted; partial data retained.") from None
@@ -360,6 +406,7 @@ def parse_arguments(argv: list[str] | None = None) -> tuple[argparse.Namespace, 
     parser.add_argument("--database", type=Path, default=defaults.database)
     parser.add_argument("--max-gb", type=float, default=10, help="Decimal GB; database + WAL stop trigger, not a filesystem quota.")
     parser.add_argument("--plan", action="store_true", help="Print today's schedule/configuration without credentials or writes.")
+    parser.add_argument("--verbose", action="store_true", help="Print safe request progress, five-second feed heartbeats and buffer commit confirmations; no SDK debug payloads.")
     parser.add_argument("--export", type=Path, metavar="NEW_DIRECTORY", help="Offline Parquet export; writer must be stopped.")
     parser.add_argument("--acknowledge-data-permissions", action="store_true", help="Confirm permission to retain and transfer this market data.")
     parser.add_argument("--delay-status", choices=("unknown", "realtime", "delayed"), default="unknown")
@@ -390,6 +437,7 @@ def parse_arguments(argv: list[str] | None = None) -> tuple[argparse.Namespace, 
             expiry_days=tuple(int(value) for value in args.expiry_days.split(",")),
             put_moneyness=tuple(float(value) for value in args.put_moneyness.split(",")),
             delay_status=args.delay_status, clock_offset_ms=args.clock_offset_ms,
+            verbose=args.verbose,
             **{name: getattr(args, name) for name in numeric},
         )
         config.validate()
