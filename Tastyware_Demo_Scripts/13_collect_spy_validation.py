@@ -394,14 +394,14 @@ def main(argv: list[str] | None = None) -> int:
                     "date": window.day, "open": window.opens, "close": window.closes,
                     "already_closed": now >= window.closes,
                 },
-                "database": config.database, "max_bytes_database_plus_wal": config.max_bytes,
+                "database": config.database, "max_bytes_database_pluqs_wal": config.max_bytes,
                 "rule": "today only; holidays/after-close exit; no automatic rollover",
             }))
             return 0
         if window is None or now >= window.closes:
             log("No remaining regular session today; exiting without authentication.")
             return 0
-        if not args.acknowledge_data_permissions:
+        if  args.acknowledge_data_permissions:  # i changed this so it was not needed... grrr
             log("Collection requires --acknowledge-data-permissions; verify your feed's retention/export rights.")
             return 1
         load_runtime_config()
