@@ -228,3 +228,7 @@ Tastyware_Demo_Scripts/.env*
 Tastyware_Demo_Scripts/*.token
 Tastyware_Demo_Scripts/*.tokens
 Tastyware_Demo_Scripts/exports/
+.venv-collector/
+*.duckdb
+*.duckdb.wal
+*.duckdb.tmp/

@@ -165,3 +165,206 @@ results:
 3. Phase 3 smoke checks: `10`–`12` (`12` remains dry-run only)
 
 Do not commit credential material, full account numbers, tokens, or private exports.
+
+## All-day SPY validation collector
+
+[13_collect_spy_validation.py](./13_collect_spy_validation.py) collects a bounded
+SPY options pilot for the external
+[Macro_Ideas collector contract](https://github.com/khazaddim/Macro_Ideas/blob/main/short_put_replay/quote_collector_requirements.md).
+It is a read-only collector, not an IV solver or a model-approval tool.
+
+### Environment and startup
+
+The collector uses **standard CPython**, not the free-threaded demo interpreter:
+DuckDB has no compatible Windows `cp314t` wheel in the tested environment.
+The existing `.venv` and demo lock are unchanged. The collector was tested with
+CPython 3.14.0, tastytrade 13.2.3 and DuckDB 1.5.6. `pytz` is required by DuckDB's
+Python TIMESTAMPTZ conversion. The collector lock constrains shared dependencies
+to the existing demo lock.
+
+From the repository root (the standard Python path below is this machine's):
+
+```powershell
+uv venv --python C:\Python314\python.exe .venv-collector
+uv pip install --python .\.venv-collector\Scripts\python.exe --only-binary=:all: -r .\Tastyware_Demo_Scripts\requirements-collector.lock
+
+# No authentication, subscriptions or database writes:
+.\.venv-collector\Scripts\python.exe .\Tastyware_Demo_Scripts\13_collect_spy_validation.py --plan
+
+# Set Tasty_SECRET and Tasty_Refresh locally as for the other demos.
+$env:TASTYTRADE_ENV = 'production'
+.\.venv-collector\Scripts\python.exe .\Tastyware_Demo_Scripts\13_collect_spy_validation.py --acknowledge-data-permissions
+```
+
+Only acknowledge permissions after verifying that your market-data agreement
+allows retention and transfer to the validation repository. No authenticated
+full-session pilot was run as part of implementation.
+
+- Started before the open: waits for **today's** regular XNYS open.
+- Started during the session: joins now; earlier missed cycles remain explicit.
+- Started after close, on a weekend or on a holiday: exits without authentication.
+  It does **not** wait for tomorrow. The date is determined in New York time.
+- Holidays, DST and early closes come from the exchange calendar.
+- Regular-session samples end at the calendar close. A default 15-second
+  publication grace plus 30-second bounded candle reconciliation follows.
+  This intentionally excludes any later SPY-option trading session.
+- Ctrl+C closes the database and marks the run interrupted.
+
+Default database: `Tastyware_Demo_Scripts\exports\spy_validation.duckdb`.
+Use `--database <path.duckdb>` to change it. The database, WAL and exports are
+Git-ignored. Only one collector may write a database at once.
+
+### Sampling and quality configuration
+
+The default universe selects nearest listed expirations to **0, 7, 14, 17,
+28 and 56 calendar days**. Each expiry contributes up to nine puts using
+adjacent strike ladders below strike/spot anchors **0.95, 0.975 and 1.0**, plus
+three calls closest to spot. Selection never uses broker delta. Options must
+be active, not past their stop-trading timestamp, have SPY roots and represent
+100 shares. Complete deliverables/currency are not certified by that filter.
+
+The universe refreshes every 30 minutes. Previously selected contracts remain
+subscribed and retained, including after a same-day restart. The cumulative
+cap is 96 options. An expansion exceeding that cap is rejected and diagnosed,
+not silently truncated. Actual expirations, selected/rejected counts, selection
+spot and effective universe revisions are stored.
+
+Relevant flags (`--help` lists all):
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--sample-seconds` | 60 | Nominal cadence, anchored to today's open |
+| `--quote-age` | 5 | Maximum age of both bid and ask, seconds |
+| `--analytics-age` | 15 | Maximum analytics source age, seconds |
+| `--max-skew` | 2 | Maximum backward option/underlying source-time skew, seconds |
+| `--max-lateness` | 5 | Late snapshots remain stored but are quality-flagged |
+| `--candle-grace` | 15 | Elapsed interval publication grace, seconds |
+| `--max-gb` | 10 | Decimal GB stop threshold, including database and WAL |
+| `--expiry-days` | `0,7,14,17,28,56` | Calendar-day expiry targets |
+| `--put-moneyness` | `0.95,0.975,1` | Strike/spot anchors for adjacent put ladders |
+| `--puts-per-expiry` / `--calls-per-expiry` | 9 / 3 | Pilot breadth |
+| `--max-contracts` | 96 | Cumulative session option cap |
+| `--refresh-seconds` | 1800 | Universe refresh |
+| `--flush-seconds` | 5 | Candle/diagnostic transaction interval |
+| `--candle-refresh-seconds` / `--overlap-minutes` | 300 / 5 | Candle overlap re-request |
+| `--reconnect-attempts` | 5 | Total reconnect budget; exponential backoff capped at 30 seconds |
+| `--delay-status` | `unknown` | User-verified `realtime`, `delayed`, or unknown |
+| `--clock-offset-ms` | omitted | User-measured local clock offset; omitted is unknown |
+
+Verify clock synchronization and feed entitlement before supplying
+`--clock-offset-ms` and `--delay-status realtime`; do not invent a zero offset
+to bypass a quality flag. Unknown source timestamps, delay status or clock
+offset do not count as verified freshness.
+
+Quotes, last trades and Greeks stream continuously. Minute snapshots retain
+the latest received states and their original payloads, **not every tick**.
+The paired SPY quote is the latest retained quote with source time no later
+than the option quote and receipt time no later than the sample. A bounded
+SPY history supports that backward match; missing matches remain missing.
+Quote source time is the later of bid/ask update times, while quote age checks
+both sides. Source time, local processing/receipt time, scheduled time and
+actual sampling time are separate. Pairing is at millisecond precision;
+original integer timestamps and sub-millisecond fields remain in raw JSON.
+
+The first scheduled sample is one interval after the open; the last is at
+the close. Sampling is not atomic across instruments. A late current sample
+is retained and flagged; whole missed intervals are recorded without
+fabricating historical snapshots. Missing/stale Greeks do not discard quotes.
+Zero-bid, crossed, locked, invalid and one-sided quotes remain available for
+diagnosis. Last trade is never substituted for midpoint.
+
+### Persistence, failures and the 10 GB stop
+
+Each minute's samples and referenced raw payloads are committed together.
+Candle revisions and diagnostics are committed at least every configured
+flush interval while the loop is responsive; checkpoints occur approximately
+once per minute. Committed WAL data survives process termination. The latest
+uncommitted minute state or candle buffer can be lost; this is not an all-tick
+recorder. Do not copy/delete the live `.wal` separately from the database.
+Use local reliable storage, not a network share or a cloud-synchronized folder.
+
+Restart with the same command/database to append a **new run**, not overwrite
+earlier data. Unfinished runs are marked interrupted with unknown end time.
+The earlier universe is restored, subscriptions are renewed, and the new run
+does not claim to have captured pre-restart minutes. Raw payload hashes
+deduplicate identical source content; distinct receipts and sampling attempts
+retain their own IDs. Stream gaps cannot be repaired with candle backfills.
+
+The storage threshold checks **database + WAL bytes before/after each bounded
+transaction and checkpoint**. It is a stop trigger, not a hard filesystem
+quota: one batch/checkpoint and the final run-status write can overshoot it.
+No data is deleted to make room. Offline exports require additional space and
+are not included in this capture threshold. DuckDB's memory budget is 512 MB;
+pending event buffers are bounded and overflow is an explicit failure.
+
+Exit codes: **0** session ended with recorded coverage (or no session today),
+**2** partial coverage/storage stop, **1** fatal failure, **130** Ctrl+C.
+Absent candles count as incomplete coverage, not proof that no trades occurred.
+Even exit 0 does **not** approve feed semantics, broker/model agreement or
+historical replay. Health counters are printed during collection.
+
+### Database and export contract
+
+| Table/view | Contents |
+|---|---|
+| `runs` | Config, capability manifest, code revision/file hashes, versions, session, status |
+| `raw_records` | Content-addressed original requested market-data fields and reference provenance |
+| `instruments`, `universe_revisions` | Contract terms, reference payloads, effective selection history |
+| `quotes`, `trades`, `analytics` | Source and receipt times, unscaled numeric feed values, raw references |
+| `cycles`, `samples` | Scheduled/actual samples, explicit quote/spot/analytics/trade joins, age/skew, quality |
+| `candles`, `latest_candles` | All received candle revisions and deterministic latest-by-receipt view |
+| `requests`, `diagnostics` | Request attempts, rate-limit/failure categories, gaps, clock jumps, event counters |
+| `run_coverage` | Per-run cycle, sample, eligibility and diagnostic counts |
+
+Normalized observation tables carry `schema_version`, `run_id`, `record_id`,
+`source`, `received_at_utc` and `raw_record_id`. Administrative cycles and
+diagnostics have no source payload and therefore null raw references.
+Raw content may be shared across runs; join by raw ID, not by run ID.
+Payloads preserve numeric strings/sentinels; normalized non-finite numbers
+become null with quality reasons. Prices and Greeks are not multiplied by
+contract size. Timestamps are UTC; Parquet uses typed nulls.
+
+`quote_eligible` means the configured quote/pair timing checks passed, **not**
+that all downstream BSM terms/dividend/rate policies are approved.
+`analytics_fresh` checks independent analytics timing and fields.
+`broker_comparison_ready` stays false because broker Greek units, pricing
+model and inputs have not been independently verified.
+
+The streaming interfaces do not provide a broker mark or analytics' underlying,
+rate/dividend inputs. `analytics.price` remains separate from midpoint and is
+not relabeled as mark. Candle price/adjustment basis and provider finality
+remain unverified. `elapsed_with_grace` only describes receipt relative to
+interval end. Replayed candles retain actual retrieval/receipt time; no
+historical point-in-time availability is implied. Invalid/pending/removal
+events remain flagged, not treated as finalized bars.
+
+The adapter is pinned to tastytrade 13.2.3 and captures requested market-data
+fields before SDK validators can drop invalid quotes or turn missing candle
+prices into zero. It does not record authentication frames or enable SDK
+debug logs. Revalidate this adapter before changing the SDK pin.
+
+Stop the writer before querying/exporting from another process. Export:
+
+```powershell
+.\.venv-collector\Scripts\python.exe .\Tastyware_Demo_Scripts\13_collect_spy_validation.py `
+  --export .\Tastyware_Demo_Scripts\exports\spy-pilot-export
+```
+
+The destination must not exist. Export writes Parquet tables/views and a JSON
+manifest containing column schemas, row counts, SHA-256 checksums, timing/
+quality summaries, and per-instrument candle coverage. Inspect `samples.quality`
+and `runs.capabilities` before selecting rows for numerical comparison.
+The report treats missing bars as unknown absence and reports unverified
+capabilities rather than fabricating successful validation.
+
+### Credential-free collector validation
+
+```powershell
+.\.venv-collector\Scripts\python.exe -m unittest -v Tastyware_Demo_Scripts.test_spy_collector
+```
+
+Tests cover calendar/DST/early-close behavior, raw full/compact framing,
+invalid/missing/stale observations, backward matching and threshold boundaries,
+minute sampling, closing reconciliation, sanitized failures, reconnects,
+transaction rollback, size stops, actual subprocess-crash WAL recovery,
+restart universe retention, candle revisions, and portable exports.

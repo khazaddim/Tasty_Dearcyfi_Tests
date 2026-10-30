@@ -1,0 +1,3 @@
+-r requirements.in
+duckdb>=1.4,<2
+pytz>=2025
