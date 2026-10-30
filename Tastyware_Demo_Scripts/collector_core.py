@@ -13,6 +13,7 @@ import json
 import math
 from pathlib import Path
 import sys
+from time import monotonic_ns
 from typing import Any
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -23,7 +24,7 @@ from tastytrade.instruments import Option
 from tastytrade.session import Session
 from tastytrade.streamer import DXLinkStreamer
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 SDK_VERSION = "13.2.3"
 SOURCE = "tastytrade.dxlink"
 EVENT_CLASSES = {"Quote": Quote, "Greeks": Greeks, "Trade": Trade, "Candle": Candle}
@@ -71,7 +72,7 @@ def source_time(value: object) -> datetime | None:
 @dataclass(frozen=True)
 class CollectorConfig:
     database: Path = Path("Tastyware_Demo_Scripts/exports/spy_validation.duckdb")
-    max_bytes: int = 10_000_000_000
+    max_bytes: int = 20_000_000_000
     sample_seconds: int = 60
     quote_age: float = 5
     analytics_age: float = 15
@@ -84,12 +85,12 @@ class CollectorConfig:
     expiry_days: tuple[int, ...] = (0, 7, 14, 17, 28, 56)
     put_moneyness: tuple[float, ...] = (0.95, 0.975, 1.0)
     refresh_seconds: int = 1800
-    flush_seconds: float = 5
+    flush_seconds: float = 1
     overlap_minutes: int = 5
     candle_refresh_seconds: int = 300
     reconciliation_seconds: float = 30
     request_timeout: float = 30
-    reconnect_attempts: int = 5
+    reconnect_attempts: int = 1000
     transport_idle: float = 120
     max_pending: int = 50_000
     delay_status: str = "unknown"
@@ -246,6 +247,15 @@ class Observation:
         return source_time(self.fields.get("time"))
 
 
+@dataclass(frozen=True)
+class ReceivedUpdate:
+    observation: Observation
+    receive_sequence: int
+    connection_id: str
+    received_monotonic_ns: int = field(default_factory=monotonic_ns)
+    record_id: str = field(default_factory=identifier)
+
+
 def decode_events(kind: str, message: list[Any], received: datetime) -> list[Observation]:
     """Decode requested COMPACT fields without the SDK's lossy validators."""
     model = EVENT_CLASSES[kind]
@@ -309,10 +319,12 @@ class CaptureState:
         self.config = config
         self.latest: dict[tuple[str, str], Observation] = {}
         self.spot_history: deque[Observation] = deque(maxlen=50_000)
-        self.candles: list[Observation] = []
+        self.updates: list[ReceivedUpdate] = []
         self.diagnostics: list[tuple[str, str, dict[str, object]]] = []
         self.counts: Counter[str] = Counter()
         self.last_received: datetime | None = None
+        self.connection_id = identifier()
+        self.receive_sequence = 0
 
     def diagnostic(self, code: str, symbol: str, details: dict[str, object]) -> None:
         if len(self.diagnostics) >= self.config.max_pending:
@@ -320,12 +332,13 @@ class CaptureState:
         self.diagnostics.append((code, symbol, details))
 
     def receive(self, observation: Observation) -> None:
+        if len(self.updates) >= self.config.max_pending:
+            raise BufferError("Market-data update buffer exhausted; collection must stop without silent drops.")
+        self.receive_sequence += 1
+        self.updates.append(ReceivedUpdate(observation, self.receive_sequence, self.connection_id))
         self.last_received = observation.received_at
         self.counts[observation.kind] += 1
         if observation.kind == "Candle":
-            if len(self.candles) >= self.config.max_pending:
-                raise BufferError("Candle buffer exhausted; collection must stop.")
-            self.candles.append(observation)
             return
         key = (observation.kind, observation.symbol)
         previous = self.latest.get(key)
@@ -346,6 +359,7 @@ class CaptureState:
                 self.spot_history.popleft()
 
     def reset_connection(self) -> None:
+        self.connection_id = identifier()
         self.latest.clear()
         self.spot_history.clear()
         self.last_received = None
@@ -444,7 +458,10 @@ def capability_manifest(config: CollectorConfig) -> dict[str, object]:
         "environment": "production", "delay_status": config.delay_status,
         "clock_offset_ms_user_reported": config.clock_offset_ms,
         "interfaces": ["DXLink Quote", "DXLink Trade", "DXLink Greeks", "DXLink Candle", "REST option chain"],
-        "raw": "Requested market-data fields before SDK validation; not authentication frames or all ticks.",
+        "raw": "Every decoded Quote/Trade/Greeks/Candle update received for subscribed symbols, before SDK validation; not authentication frames or every exchange tick.",
+        "recording_mode": "all_received_updates_and_minute_samples",
+        "receipt_order": "UTC receipt time plus per-run receive_sequence, local monotonic nanoseconds and per-connection ID; monotonic epochs are not portable across processes/machines.",
+        "raw_update_coverage": "Only schema-2 runs capture all received updates. Earlier runs retain their original sampled coverage; disconnected periods cannot be reconstructed.",
         "timestamp_units": "Unix milliseconds: Quote bidTime/askTime, Trade/Greeks/Candle time. Zero is unknown.",
         "precision": "Original timeNanoPart and integer source fields retained in raw JSON; normalized timestamps use milliseconds.",
         "quote_time_reference": "https://docs.dxfeed.com/dxfeed/api/com/dxfeed/event/market/Quote.html",

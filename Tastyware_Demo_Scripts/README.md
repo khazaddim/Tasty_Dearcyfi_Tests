@@ -249,7 +249,9 @@ Heartbeats show cumulative Quote/Trade/Greeks/Candle receipt counts, new events
 since the previous report, time since the last event, cached quote count and
 source-timestamp availability. Zero new events remain visible; blocking setup
 requests can delay heartbeats. Buffer commit messages confirm candle/diagnostic
-transactions; the normal minute messages confirm sampled quote writes.
+transactions, including every received market-data update; the normal minute
+messages confirm sampled quote writes. Heartbeats also report committed and
+buffered raw-update counts.
 Receipt counts are not database row counts or proof of validation eligibility.
 Verbose mode does not enable SDK debug logging or print credentials/raw payloads,
 and does not change subscription, sampling or persistence behavior.
@@ -263,15 +265,15 @@ and does not change subscription, sampling or persistence behavior.
 | `--max-skew` | 2 | Maximum backward option/underlying source-time skew, seconds |
 | `--max-lateness` | 5 | Late snapshots remain stored but are quality-flagged |
 | `--candle-grace` | 15 | Elapsed interval publication grace, seconds |
-| `--max-gb` | 10 | Decimal GB stop threshold, including database and WAL |
+| `--max-gb` | 20 | Decimal GB stop threshold, including database and WAL |
 | `--expiry-days` | `0,7,14,17,28,56` | Calendar-day expiry targets |
 | `--put-moneyness` | `0.95,0.975,1` | Strike/spot anchors for adjacent put ladders |
 | `--puts-per-expiry` / `--calls-per-expiry` | 9 / 3 | Pilot breadth |
 | `--max-contracts` | 96 | Cumulative session option cap |
 | `--refresh-seconds` | 1800 | Universe refresh |
-| `--flush-seconds` | 5 | Candle/diagnostic transaction interval |
+| `--flush-seconds` | 1 | All-update/diagnostic batch transaction interval, including during setup |
 | `--candle-refresh-seconds` / `--overlap-minutes` | 300 / 5 | Candle overlap re-request |
-| `--reconnect-attempts` | 5 | Total reconnect budget; exponential backoff capped at 30 seconds |
+| `--reconnect-attempts` | 1000 | Unattended-session reconnect budget; exponential backoff capped at 30 seconds and bounded by today's session deadline |
 | `--delay-status` | `unknown` | User-verified `realtime`, `delayed`, or unknown |
 | `--clock-offset-ms` | omitted | User-measured local clock offset; omitted is unknown |
 
@@ -280,8 +282,13 @@ Verify clock synchronization and feed entitlement before supplying
 to bypass a quality flag. Unknown source timestamps, delay status or clock
 offset do not count as verified freshness.
 
-Quotes, last trades and Greeks stream continuously. Minute snapshots retain
-the latest received states and their original payloads, **not every tick**.
+Quotes, last trades and Greeks stream continuously. **Every decoded update
+received for subscribed symbols** is now retained, including duplicates, invalid
+values and out-of-order events. This is every update delivered to this process,
+not a guarantee of every exchange tick or coverage of every listed SPY option.
+The existing bounded pilot universe remains unchanged.
+Minute snapshots independently retain the latest received states and their
+original payloads; they are not time-window averages.
 The paired SPY quote is the latest retained quote with source time no later
 than the option quote and receipt time no later than the sample. A bounded
 SPY history supports that backward match; missing matches remain missing.
@@ -297,14 +304,17 @@ fabricating historical snapshots. Missing/stale Greeks do not discard quotes.
 Zero-bid, crossed, locked, invalid and one-sided quotes remain available for
 diagnosis. Last trade is never substituted for midpoint.
 
-### Persistence, failures and the 10 GB stop
+### Persistence, failures and the 20 GB stop
 
 Each minute's samples and referenced raw payloads are committed together.
-Candle revisions and diagnostics are committed at least every configured
-flush interval while the loop is responsive; checkpoints occur approximately
-once per minute. Committed WAL data survives process termination. The latest
-uncommitted minute state or candle buffer can be lost; this is not an all-tick
-recorder. Do not copy/delete the live `.wal` separately from the database.
+All-update batches, candle revisions and diagnostics are committed by a
+supervised background task every configured flush interval (default one second)
+while the event loop is responsive, including during subscription/chain requests
+and reconnect waits. Storage failures stop collection explicitly. Checkpoints
+occur approximately once per minute. Committed WAL data survives process
+termination. Graceful cancellation flushes pending updates; abrupt termination
+can lose the last uncommitted batch, and disk/size-limit failures may prevent
+that final flush. Do not copy/delete the live `.wal` separately from the database.
 Use local reliable storage, not a network share or a cloud-synchronized folder.
 
 Restart with the same command/database to append a **new run**, not overwrite
@@ -320,6 +330,12 @@ quota: one batch/checkpoint and the final run-status write can overshoot it.
 No data is deleted to make room. Offline exports require additional space and
 are not included in this capture threshold. DuckDB's memory budget is 512 MB;
 pending event buffers are bounded and overflow is an explicit failure.
+The default all-update buffer is 50,000 events; nothing is silently evicted.
+
+Schema 1 databases are upgraded transactionally to schema 2 without deleting or
+rewriting earlier samples. Complete update history starts with schema-2 runs;
+missing updates from earlier runs or disconnected periods cannot be recovered.
+Each run's capability manifest records its recording mode.
 
 Exit codes: **0** session ended with recorded coverage (or no session today),
 **2** partial coverage/storage stop, **1** fatal failure, **130** Ctrl+C.
@@ -333,12 +349,14 @@ historical replay. Health counters are printed during collection.
 |---|---|
 | `runs` | Config, capability manifest, code revision/file hashes, versions, session, status |
 | `raw_records` | Content-addressed original requested market-data fields and reference provenance |
+| `raw_updates` | One row per received update, including repeated payloads; kind/symbol, source/UTC receipt time, monotonic nanoseconds, per-run receive sequence, connection ID, observation/raw IDs |
+| `raw_update_payloads` | All `raw_updates` columns plus original decoded JSON payload; convenient notebook view |
 | `instruments`, `universe_revisions` | Contract terms, reference payloads, effective selection history |
-| `quotes`, `trades`, `analytics` | Source and receipt times, unscaled numeric feed values, raw references |
+| `quotes`, `trades`, `analytics` | Every received normalized observation, also referenced by minute samples; source/receipt times, unscaled numeric feed values, raw references |
 | `cycles`, `samples` | Scheduled/actual samples, explicit quote/spot/analytics/trade joins, age/skew, quality |
 | `candles`, `latest_candles` | All received candle revisions and deterministic latest-by-receipt view |
 | `requests`, `diagnostics` | Request attempts, rate-limit/failure categories, gaps, clock jumps, event counters |
-| `run_coverage` | Per-run cycle, sample, eligibility and diagnostic counts |
+| `run_coverage` | Per-run received-update, cycle, sample, eligibility and diagnostic counts |
 
 Normalized observation tables carry `schema_version`, `run_id`, `record_id`,
 `source`, `received_at_utc` and `raw_record_id`. Administrative cycles and
@@ -380,6 +398,59 @@ quality summaries, and per-instrument candle coverage. Inspect `samples.quality`
 and `runs.capabilities` before selecting rows for numerical comparison.
 The report treats missing bars as unknown absence and reports unverified
 capabilities rather than fabricating successful validation.
+
+### Notebook analysis after stopping the writer
+
+Use the collector environment (or another environment with DuckDB installed).
+These queries do not require API credentials:
+
+```python
+import duckdb
+
+con = duckdb.connect(
+    r"C:\Chris\Tasty_Dearcyfi_Tests\Tastyware_Demo_Scripts\exports\spy_validation.duckdb",
+    read_only=True,
+)
+con.execute("SET TimeZone='UTC'")
+
+# Review recording modes and coverage before combining runs.
+coverage = con.sql("SELECT * FROM run_coverage").df()
+updates = con.sql("""
+    SELECT run_id, connection_id, receive_sequence, received_at_utc,
+           received_monotonic_ns, kind, symbol, source_time, payload
+    FROM raw_update_payloads
+    ORDER BY run_id, receive_sequence
+    LIMIT 100
+""").df()
+
+# Notebook-friendly quotes with receipt ordering and retained bid/ask values.
+quotes = con.sql("""
+    SELECT u.run_id, u.connection_id, u.receive_sequence,
+           u.received_at_utc, u.received_monotonic_ns,
+           q.symbol, q.bid, q.ask, q.bid_size, q.ask_size, q.source_time
+    FROM raw_updates u JOIN quotes q ON q.record_id=u.observation_id
+    WHERE u.kind='Quote'
+    ORDER BY u.run_id, u.receive_sequence
+    LIMIT 1000
+""").df()
+con.close()
+```
+
+For receipt-time backward matching, match option updates to preceding SPY quote
+updates within the **same run and connection**, ordered by `receive_sequence`.
+Measure receipt gaps using `received_monotonic_ns`, not wall-clock differences;
+only compare monotonic values within the same process/run. UTC receipt times
+can be equal for multiple events decoded from one frame. These times describe
+local callback processing, not exchange occurrence or measured network latency.
+Receipt-time alignment must be explicitly labeled as such; it does not change
+the minute samples' strict source-time eligibility. Earlier schema-1 quotes
+remain in `quotes`, but do not have `raw_updates` delivery metadata.
+
+Instrument metadata and broker Greeks are available in `instruments` and
+`analytics`; use `raw_updates.observation_id` to locate received analytics.
+Risk-free rates, dividends and broker pricing conventions are still external
+inputs: this capture alone does not certify BSM/European-vs-American agreement.
+Keep notebooks' data outputs and exports out of Git.
 
 ### Credential-free collector validation
 

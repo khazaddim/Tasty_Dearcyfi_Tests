@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
@@ -12,6 +13,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from time import perf_counter
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -24,7 +26,7 @@ from Tastyware_Demo_Scripts.collector_core import (
     quote_quality, select_universe, source_time,
 )
 from Tastyware_Demo_Scripts.collector_store import (
-    CollectorStore, StorageLimitReached, database_bytes, export_database,
+    CollectorStore, StorageLimitReached, database_bytes, export_database, report,
 )
 
 RUNNER = importlib.import_module("Tastyware_Demo_Scripts.13_collect_spy_validation")
@@ -186,7 +188,7 @@ class CaptureAndQualityTests(unittest.TestCase):
         self.assertEqual(quote_quality(event(), NOW, 5)[2], [])
 
     def test_out_of_order_and_buffer_overflow_are_visible(self) -> None:
-        state = CaptureState(replace(CollectorConfig(), max_pending=1))
+        state = CaptureState(replace(CollectorConfig(), max_pending=3))
         current = event()
         state.receive(current)
         state.receive(event(at=NOW - timedelta(seconds=1)))
@@ -195,6 +197,7 @@ class CaptureAndQualityTests(unittest.TestCase):
         state.receive(event("Candle"))
         with self.assertRaises(BufferError):
             state.receive(event("Candle"))
+        self.assertEqual(len(state.updates), 3)
         state.reset_connection()
         self.assertFalse(state.latest)
         self.assertFalse(state.spot_history)
@@ -221,6 +224,99 @@ class StoreTests(unittest.TestCase):
         state.receive(event("Greeks", "OPT", time=int((NOW - timedelta(seconds=30)).timestamp() * 1000)))
         state.receive(event("Trade"))
         return state
+
+    def test_all_updates_retain_duplicates_invalid_and_out_of_order_receipts(self) -> None:
+        state = CaptureState(self.config)
+        observations = [
+            event(bid_time=0, ask_time=0),
+            event(bid_time=0, ask_time=0),
+            event(symbol="OPT", bid_price="NaN"),
+            event(symbol="OPT", at=NOW - timedelta(seconds=1)),
+            event("Trade"), event("Greeks", "OPT"), event("Candle", "SPY{=1m}"),
+        ]
+        for observation in observations:
+            state.receive(observation)
+        first_connection = state.connection_id
+        state.reset_connection()
+        state.receive(event())
+        second_connection = state.connection_id
+        self.store.flush(state)
+        rows = self.store.connection.execute("""
+            SELECT receive_sequence, received_monotonic_ns, connection_id, payload,
+                   source_time, observation_id
+            FROM raw_update_payloads ORDER BY receive_sequence
+        """).fetchall()
+        self.assertEqual([row[0] for row in rows], list(range(1, 9)))
+        self.assertEqual(len(set(row[1] for row in rows)), 8)
+        self.assertEqual(rows[0][2], first_connection)
+        self.assertEqual(rows[-1][2], second_connection)
+        self.assertNotEqual(first_connection, second_connection)
+        self.assertEqual(rows[0][3], rows[1][3])
+        self.assertIsNone(rows[0][4])
+        self.assertEqual(json.loads(rows[2][3])["bid_price"], "NaN")
+        self.assertEqual(self.store.connection.execute("SELECT count(*) FROM quotes").fetchone()[0], 5)
+        self.assertEqual(self.store.connection.execute("SELECT count(*) FROM samples").fetchone()[0], 0)
+        self.assertFalse(state.updates)
+        self.store.flush(state)
+        self.assertEqual(self.store.connection.execute("SELECT count(*) FROM raw_updates").fetchone()[0], 8)
+        summary = self.store.summary()
+        self.assertEqual(summary["received_updates"], 8)
+        self.assertTrue(summary["all_received_updates_recording_enabled"])
+
+    def test_flush_and_sampling_share_observation_ids_without_losing_updates(self) -> None:
+        state = self.populated_state()
+        self.store.sample(state, [self.instrument], NOW, NOW)
+        self.store.flush(state)
+        self.store.sample(state, [self.instrument], NOW + timedelta(minutes=1), NOW + timedelta(minutes=1))
+        self.assertEqual(self.store.connection.execute("SELECT count(*) FROM raw_updates").fetchone()[0], 4)
+        self.assertEqual(self.store.connection.execute("SELECT count(*) FROM quotes").fetchone()[0], 2)
+        self.assertEqual(self.store.connection.execute("SELECT count(*) FROM samples").fetchone()[0], 2)
+        self.assertEqual(self.store.connection.execute("""
+            SELECT count(*) FROM samples s JOIN raw_updates u ON u.observation_id=s.quote_id
+        """).fetchone()[0], 2)
+
+    def test_failed_flush_keeps_pending_updates_for_retry(self) -> None:
+        state = self.populated_state()
+        with patch.object(self.store, "write_rows", side_effect=RuntimeError("injected")):
+            with self.assertRaises(RuntimeError):
+                self.store.flush(state)
+        self.assertEqual(len(state.updates), 4)
+        self.assertEqual(self.store.connection.execute("SELECT count(*) FROM raw_updates").fetchone()[0], 0)
+        self.store.flush(state)
+        self.assertEqual(self.store.connection.execute("SELECT count(*) FROM raw_updates").fetchone()[0], 4)
+
+    def test_schema_one_upgrade_preserves_prior_samples(self) -> None:
+        state = self.populated_state()
+        self.store.sample(state, [self.instrument], NOW, NOW)
+        old_run = self.store.run_id
+        self.store.connection.execute("DROP VIEW raw_update_payloads")
+        self.store.connection.execute("DROP VIEW run_coverage")
+        self.store.connection.execute("DROP TABLE raw_updates")
+        self.store.connection.execute("UPDATE collector_schema SET version=1")
+        self.store.connection.execute("UPDATE runs SET schema_version=1, capabilities='{}'")
+        self.store.connection.execute("UPDATE quotes SET schema_version=1")
+        self.store.close()
+        self.store = CollectorStore(self.config)
+        self.addCleanup(self.store.close)
+        self.store.start(WINDOW, "schema-two")
+        self.assertEqual(self.store.connection.execute("SELECT version FROM collector_schema").fetchone()[0], 2)
+        self.assertEqual(self.store.connection.execute("SELECT count(*) FROM samples WHERE run_id=?", [old_run]).fetchone()[0], 1)
+        self.assertEqual(self.store.connection.execute("SELECT DISTINCT schema_version FROM quotes").fetchall(), [(1,)])
+        self.assertFalse(self.store.summary()["received_updates"])
+        self.assertFalse(report(self.store.connection, old_run)["all_received_updates_recording_enabled"])
+        self.store.flush(state)
+        self.assertEqual(self.store.connection.execute("SELECT count(*) FROM raw_updates").fetchone()[0], 4)
+
+    def test_bulk_update_flush_within_five_second_budget(self) -> None:
+        state = CaptureState(self.config)
+        for index in range(5000):
+            kind = ("Quote", "Trade", "Greeks", "Candle")[index % 4]
+            state.receive(event(kind, "SPY" if kind != "Greeks" else "OPT", sequence=index))
+        start = perf_counter()
+        self.store.flush(state)
+        elapsed = perf_counter() - start
+        self.assertLess(elapsed, 5, f"5000-update commit took {elapsed:.3f}s")
+        self.assertEqual(self.store.connection.execute("SELECT count(*) FROM raw_updates").fetchone()[0], 5000)
 
     def test_sample_retains_raw_links_and_independent_eligibility(self) -> None:
         state = self.populated_state()
@@ -330,6 +426,8 @@ class StoreTests(unittest.TestCase):
         manifest = export_database(self.path, destination)
         self.assertTrue((destination / "manifest.json").is_file())
         self.assertTrue((destination / "samples.parquet").is_file())
+        self.assertTrue((destination / "raw_updates.parquet").is_file())
+        self.assertTrue((destination / "raw_update_payloads.parquet").is_file())
         self.assertEqual(manifest["runs"][0]["option_samples"], 1)
         self.assertTrue(all(len(item["sha256"]) == 64 for item in manifest["files"]))
         with self.assertRaises(FileExistsError):
@@ -344,13 +442,17 @@ class CrashRecoveryTests(unittest.TestCase):
 import os, sys
 from pathlib import Path
 from dataclasses import replace
-from Tastyware_Demo_Scripts.collector_core import CollectorConfig
+from Tastyware_Demo_Scripts.collector_core import CaptureState, CollectorConfig
 from Tastyware_Demo_Scripts.collector_store import CollectorStore
-from Tastyware_Demo_Scripts.test_spy_collector import WINDOW
+from Tastyware_Demo_Scripts.test_spy_collector import WINDOW, event
 store = CollectorStore(replace(CollectorConfig(), database=Path(sys.argv[1])))
 store.start(WINDOW, "crash-test")
 with store.transaction():
     store.diagnostic("durable_before_crash", {})
+state = CaptureState(store.config)
+state.receive(event(bid_time=0, ask_time=0))
+state.receive(event(bid_time=0, ask_time=0))
+store.flush(state)
 os._exit(0)
 """
             result = subprocess.run(
@@ -367,14 +469,72 @@ os._exit(0)
                 self.assertEqual(store.connection.execute(
                     "SELECT count(*) FROM runs WHERE status='interrupted'",
                 ).fetchone()[0], 1)
+                self.assertEqual(store.connection.execute("SELECT count(*) FROM raw_updates").fetchone()[0], 2)
             finally:
                 store.close()
 
 
 class RunnerTests(unittest.IsolatedAsyncioTestCase):
+    async def test_updates_flush_during_slow_connection_setup(self) -> None:
+        store = MagicMock()
+        collector = RUNNER.SessionCollector(replace(CollectorConfig(), flush_seconds=0.01), WINDOW, store)
+        store.flush.side_effect = lambda state: state.updates.clear()
+
+        async def setup() -> None:
+            collector.state.receive(event())
+            await asyncio.sleep(0.04)
+            self.assertFalse(collector.state.updates)
+            self.assertGreaterEqual(collector.persisted_updates, 1)
+
+        with patch.object(collector, "collect_connections", side_effect=setup):
+            await collector.collect()
+        self.assertGreaterEqual(store.flush.call_count, 2)
+
+    async def test_writer_failure_cancels_collection_and_is_not_silent(self) -> None:
+        store = MagicMock()
+        store.flush.side_effect = OSError("injected disk failure")
+        collector = RUNNER.SessionCollector(replace(CollectorConfig(), flush_seconds=0.01), WINDOW, store)
+        cancelled = asyncio.Event()
+
+        async def connection() -> None:
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.set()
+
+        with patch.object(collector, "collect_connections", side_effect=connection):
+            with self.assertRaises(OSError):
+                await collector.collect()
+        self.assertTrue(cancelled.is_set())
+
+    async def test_graceful_cancellation_flushes_last_raw_updates(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = replace(CollectorConfig(), database=Path(directory) / "cancel.duckdb")
+            store = CollectorStore(config)
+            store.start(WINDOW, "cancel")
+            collector = RUNNER.SessionCollector(config, WINDOW, store)
+            received = asyncio.Event()
+
+            async def connection() -> None:
+                collector.state.receive(event())
+                received.set()
+                await asyncio.Event().wait()
+
+            try:
+                with patch.object(collector, "collect_connections", side_effect=connection):
+                    task = asyncio.create_task(collector.collect())
+                    await received.wait()
+                    task.cancel()
+                    with self.assertRaises(asyncio.CancelledError):
+                        await task
+                self.assertEqual(store.connection.execute("SELECT count(*) FROM raw_updates").fetchone()[0], 1)
+            finally:
+                store.close()
+
     def test_verbose_flag_is_opt_in(self) -> None:
         self.assertFalse(RUNNER.parse_arguments([])[1].verbose)
         self.assertTrue(RUNNER.parse_arguments(["--verbose"])[1].verbose)
+        self.assertEqual(RUNNER.parse_arguments([])[1].max_bytes, 20_000_000_000)
         collector = RUNNER.SessionCollector(CollectorConfig(), WINDOW, MagicMock())
         with patch.object(RUNNER, "log") as output:
             collector.report_feed(NOW)
@@ -632,7 +792,7 @@ class RunnerTests(unittest.IsolatedAsyncioTestCase):
                     (later - earlier).total_seconds() >= 5
                     for earlier, later in zip(heartbeats, heartbeats[1:])
                 ))
-                self.assertTrue(any("Database buffers committed: candle_revisions=1" in text for _, text in messages))
+                self.assertTrue(any("Database buffers committed: candle_revisions=2" in text for _, text in messages))
             finally:
                 store.close()
 

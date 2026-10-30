@@ -5,7 +5,8 @@ Testing DearCyGui / DearCyFi Integrations with TastyTrade In a collection of Dem
 
 See the [SDK demo and collector guide](./Tastyware_Demo_Scripts/README.md).
 The SPY validation collector waits for today's regular market open and persists
-minute snapshots, broker analytics and candle revisions in DuckDB. It uses a
+every received market-data update, minute snapshots, broker analytics and candle
+revisions in DuckDB, with a default 20 GB database/WAL stop threshold. It uses a
 separate standard-Python `.venv-collector` environment; do not install DuckDB
 into the free-threaded DearCyGui environment described below.
 

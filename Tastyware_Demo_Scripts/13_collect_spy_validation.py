@@ -68,6 +68,7 @@ class SessionCollector:
         self.closing_requested = False
         self.stage = "initializing"
         self.reported_counts: dict[str, int] = {}
+        self.persisted_updates = 0
 
     def verbose_log(self, message: str) -> None:
         if self.config.verbose:
@@ -88,16 +89,20 @@ class SessionCollector:
         self.verbose_log(
             f"Feed received_total={counts}; new_since_report={added}; last_event_age={age}; "
             f"cached_quotes={len(quotes)}; source_timestamp_known={timestamped}/{len(quotes)}. "
+            f"raw_updates_committed={self.persisted_updates}; buffered_updates={len(self.state.updates)}. "
             "Receipt counts are not persisted-row counts or validation eligibility."
         )
         self.reported_counts = counts
 
     def flush(self) -> None:
-        candles, diagnostics = len(self.state.candles), len(self.state.diagnostics)
+        updates, diagnostics = len(self.state.updates), len(self.state.diagnostics)
+        candles = sum(update.observation.kind == "Candle" for update in self.state.updates)
         self.store.flush(self.state)
-        if self.config.verbose and (candles or diagnostics):
+        self.persisted_updates += updates
+        if self.config.verbose and (updates or diagnostics):
             self.verbose_log(
                 f"Database buffers committed: candle_revisions={candles}; diagnostics={diagnostics}; "
+                f"raw_updates={updates}; raw_updates_committed={self.persisted_updates}; "
                 f"database_plus_wal_bytes={database_bytes(self.config.database)}."
             )
 
@@ -252,7 +257,6 @@ class SessionCollector:
         if utc_now() < self.window.closes:
             await self.refresh_universe(session, streamer)
         self.next_candles = utc_now() + timedelta(seconds=self.config.candle_refresh_seconds)
-        flush_at = monotonic() + self.config.flush_seconds
         checkpoint_at = monotonic() + 60
         report_at = monotonic()
         previous_wall, previous_mono = utc_now(), monotonic()
@@ -270,9 +274,6 @@ class SessionCollector:
                 self.state.diagnostic("local_clock_jump", "", {"seconds": jump})
             previous_wall, previous_mono = now, tick
             self.record_due_samples(now)
-            if tick >= flush_at:
-                self.flush()
-                flush_at = tick + self.config.flush_seconds
             if self.config.verbose and tick >= report_at:
                 self.report_feed(now)
                 report_at = tick + 5
@@ -296,6 +297,27 @@ class SessionCollector:
         self.flush()
 
     async def collect(self) -> None:
+        try:
+            async with asyncio.TaskGroup() as group:
+                writer = group.create_task(self.persist_updates())
+                try:
+                    await self.collect_connections()
+                finally:
+                    writer.cancel()
+        except BaseExceptionGroup as exc:
+            errors = leaves(exc)
+            if len(errors) == 1:
+                raise errors[0] from None
+            raise
+        finally:
+            self.flush()
+
+    async def persist_updates(self) -> None:
+        while True:
+            await asyncio.sleep(self.config.flush_seconds)
+            self.flush()
+
+    async def collect_connections(self) -> None:
         self.store.universe([Instrument("SPY", "SPY", reference={
             "symbol": "SPY", "source": "configured underlying",
             "currency_adjustments": "unverified",
@@ -362,7 +384,8 @@ async def run_collection(config: CollectorConfig, window: SessionWindow) -> int:
         )
         store.start(window, revision.stdout.strip() if revision.returncode == 0 else "unknown")
         started = True
-        log(f"Run {store.run_id}; database={config.database}; session={window.opens} to {window.closes}.")
+        log(f"Run {store.run_id}; database={config.database}; session={window.opens} to {window.closes}; "
+            f"recording=all received updates + minute samples; limit_bytes={config.max_bytes}.")
         if utc_now() < window.opens:
             log("Waiting for today's regular session open.")
         while utc_now() < window.opens:
@@ -404,7 +427,7 @@ def parse_arguments(argv: list[str] | None = None) -> tuple[argparse.Namespace, 
     parser = argparse.ArgumentParser(description=__doc__)
     defaults = CollectorConfig()
     parser.add_argument("--database", type=Path, default=defaults.database)
-    parser.add_argument("--max-gb", type=float, default=10, help="Decimal GB; database + WAL stop trigger, not a filesystem quota.")
+    parser.add_argument("--max-gb", type=float, default=defaults.max_bytes / 1_000_000_000, help="Decimal GB; database + WAL stop trigger, not a filesystem quota.")
     parser.add_argument("--plan", action="store_true", help="Print today's schedule/configuration without credentials or writes.")
     parser.add_argument("--verbose", action="store_true", help="Print safe request progress, five-second feed heartbeats and buffer commit confirmations; no SDK debug payloads.")
     parser.add_argument("--export", type=Path, metavar="NEW_DIRECTORY", help="Offline Parquet export; writer must be stopped.")

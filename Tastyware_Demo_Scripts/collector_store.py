@@ -37,6 +37,11 @@ COMMON = """
 """
 TABLES = {
     "raw_records": "kind VARCHAR, payload JSON",
+    "raw_updates": """
+        kind VARCHAR, symbol VARCHAR, source_time TIMESTAMPTZ,
+        observation_id VARCHAR, receive_sequence BIGINT,
+        received_monotonic_ns BIGINT, connection_id VARCHAR
+    """,
     "instruments": """
         symbol VARCHAR, streamer_symbol VARCHAR, option_type VARCHAR, strike DOUBLE,
         expiration DATE, expires_at TIMESTAMPTZ, stops_trading_at TIMESTAMPTZ,
@@ -107,8 +112,9 @@ class CollectorStore:
                 raise ValueError("Refusing to modify a database without a collector schema.")
             if "collector_schema" in tables:
                 versions = self.connection.execute("SELECT version FROM collector_schema").fetchall()
-                if versions != [(SCHEMA_VERSION,)]:
+                if versions not in ([(1,)], [(SCHEMA_VERSION,)]):
                     raise ValueError("Unsupported collector database schema version.")
+            self.connection.execute("BEGIN")
             self.connection.execute("CREATE TABLE IF NOT EXISTS collector_schema (version INTEGER)")
             if "collector_schema" not in tables:
                 self.connection.execute("INSERT INTO collector_schema VALUES (?)", [SCHEMA_VERSION])
@@ -122,6 +128,11 @@ class CollectorStore:
             """)
             for table, columns in TABLES.items():
                 self.connection.execute(f"CREATE TABLE IF NOT EXISTS {table} ({COMMON}, {columns})")
+            self.connection.execute("""
+                CREATE OR REPLACE VIEW raw_update_payloads AS
+                SELECT u.*, raw.payload
+                FROM raw_updates u JOIN raw_records raw ON raw.record_id=u.raw_record_id
+            """)
             self.connection.execute("""
                 CREATE OR REPLACE VIEW latest_candles AS
                 SELECT * EXCLUDE (revision_rank) FROM (
@@ -139,9 +150,12 @@ class CollectorStore:
                     (SELECT count(*) FROM samples s WHERE s.run_id=r.run_id) AS option_samples,
                     (SELECT count(*) FROM samples s WHERE s.run_id=r.run_id AND s.quote_eligible) AS eligible_quote_samples,
                     (SELECT count(*) FROM samples s WHERE s.run_id=r.run_id AND s.analytics_fresh) AS fresh_analytics_samples,
-                    (SELECT count(*) FROM diagnostics d WHERE d.run_id=r.run_id) AS diagnostic_count
+                    (SELECT count(*) FROM diagnostics d WHERE d.run_id=r.run_id) AS diagnostic_count,
+                    (SELECT count(*) FROM raw_updates u WHERE u.run_id=r.run_id) AS received_updates
                 FROM runs r
             """)
+            self.connection.execute("UPDATE collector_schema SET version=?", [SCHEMA_VERSION])
+            self.connection.execute("COMMIT")
         except BaseException:
             self.connection.close()
             raise
@@ -398,16 +412,28 @@ class CollectorStore:
         })
 
     def flush(self, state: CaptureState) -> None:
-        if not state.candles and not state.diagnostics:
+        if not state.updates and not state.diagnostics:
             self.check_size()
             return
         # The event loop is not yielded while this transaction drains its buffers.
         with self.transaction():
-            for observation in state.candles:
-                self.candle(observation)
+            for update in state.updates:
+                observation = update.observation
+                if observation.kind == "Candle":
+                    self.candle(observation)
+                else:
+                    self.observation(observation)
+                self.insert("raw_updates", {
+                    **self.common(update.record_id, observation.received_at, observation.raw_id),
+                    "kind": observation.kind, "symbol": observation.symbol,
+                    "source_time": observation.timestamp, "observation_id": observation.record_id,
+                    "receive_sequence": update.receive_sequence,
+                    "received_monotonic_ns": update.received_monotonic_ns,
+                    "connection_id": update.connection_id,
+                })
             for code, symbol, details in state.diagnostics:
                 self.diagnostic(code, details, symbol)
-        state.candles.clear()
+        state.updates.clear()
         state.diagnostics.clear()
 
     def request(
@@ -432,7 +458,7 @@ def report(connection: duckdb.DuckDBPyConnection, run_id: str) -> dict[str, obje
         raise ValueError("Unknown collector run.")
     summary = dict(zip([column[0] for column in result.description], row))
     run = connection.execute(
-        "SELECT session_open, session_close, config FROM runs WHERE run_id=?", [run_id],
+        "SELECT session_open, session_close, config, capabilities FROM runs WHERE run_id=?", [run_id],
     ).fetchone()
     if run is None:
         raise ValueError("Missing run metadata.")
@@ -449,7 +475,14 @@ def report(connection: duckdb.DuckDBPyConnection, run_id: str) -> dict[str, obje
         "storage_bytes_database_plus_wal": database_bytes(Path(config["database"])),
         "broker_comparison_ready": False,
         "limitations": "Broker conventions, adjustment basis and full deliverables require verification.",
+        "all_received_updates_recording_enabled": json.loads(run[3]).get("recording_mode") == "all_received_updates_and_minute_samples",
     })
+    summary["received_update_counts"] = [
+        {"kind": row[0], "rows": row[1]}
+        for row in connection.execute(
+            "SELECT kind, count(*) FROM raw_updates WHERE run_id=? GROUP BY kind ORDER BY kind", [run_id],
+        ).fetchall()
+    ]
     candle_counts = connection.execute("""
         SELECT symbol, count(DISTINCT interval_start),
                count(*) FILTER (WHERE elapsed_with_grace AND quality='[]')
@@ -510,7 +543,7 @@ def export_database(database: Path, destination: Path) -> dict[str, object]:
             "null_encoding": "Parquet null; consult quality flags/capability manifest for reasons",
             "units": "UTC timestamps; numeric feed values unscaled; raw payloads retain original representation",
         }
-        tables = ["collector_schema", "runs", *TABLES, "latest_candles", "run_coverage"]
+        tables = ["collector_schema", "runs", *TABLES, "raw_update_payloads", "latest_candles", "run_coverage"]
         for table in tables:
             path = destination / f"{table}.parquet"
             escaped = str(path).replace("'", "''")
