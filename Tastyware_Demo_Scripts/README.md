@@ -116,6 +116,33 @@ Subscription, event collection, and unsubscription each use the configured
 overall runtime limit. Unsubscription runs after collection completes, reaches
 the event limit, times out, or fails, before the streamer context closes.
 
+#### Spot-crypto quote timestamp investigation
+
+[06_1_Crypto_Stream_Quotes.py](./06_1_Crypto_Stream_Quotes.py) resolves active
+spot-crypto instruments through `Cryptocurrency.get`, then reuses demo 06's
+streamer and unchanged quote-field output. Defaults are `BTC/USD,ETH/USD`;
+`TASTYTRADE_SYMBOLS` is ignored so an earlier SPY setting cannot override them.
+This is a read-only, console-only demo, not a DuckDB collector.
+
+```powershell
+$env:TASTYTRADE_ENV = 'production'
+.\.venv\Scripts\python.exe .\Tastyware_Demo_Scripts\06_1_Crypto_Stream_Quotes.py
+
+# Optional overrides (instrument symbols, not streaming symbols):
+$env:TASTYTRADE_CRYPTO_SYMBOLS = 'BTC/USD,ETH/USD'
+$env:TASTYTRADE_EVENT_LIMIT = '20'
+$env:TASTYTRADE_STREAM_TIMEOUT_SECONDS = '60'
+```
+
+The summary counts zero `event_time`, `bid_time`, and `ask_time` fields per
+symbol. Zero means unknown; SDK output alone cannot distinguish upstream
+omission from decoding behavior. Spot crypto may update while equities and
+ordinary futures are closed, but feed availability is not guaranteed.
+The event limit is combined across symbols, not a per-symbol guarantee.
+Lookup uses the request timeout; subscription, collection, and cleanup use
+separate stream-timeout budgets. A timeout or incomplete collection is printed
+explicitly and returns exit code 1; reaching the event limit returns 0.
+
 Historical candles and account-history requests also use the shared sync/async
 callable runner. Candle cleanup awaits `unsubscribe_candle` with the same symbol,
 interval, and extended-hours setting used for subscription. Candle subscription,
@@ -400,6 +427,34 @@ The report treats missing bars as unknown absence and reports unverified
 capabilities rather than fabricating successful validation.
 
 ### Notebook analysis after stopping the writer
+
+Start with [14_explore_spy_capture.ipynb](./14_explore_spy_capture.ipynb) for a
+read-only, step-by-step inventory of tables, collection runs, event counts,
+instruments, raw payloads, minute samples, analytics, candles and diagnostics.
+It defaults to the run with the largest received-update count and does not
+perform handoff/BSM validation yet.
+
+Section 10 measures received Quote deliveries per local-receipt minute for each
+selected SPY option. It includes zero-update minutes after first recorded
+selection, excludes pre-selection time, and separates partial boundary minutes
+from full-minute count statistics (mean, median, sample standard deviation,
+percentiles and range). Selection is an exposure proxy, not confirmed uptime.
+Counts include repeated payloads and do not establish price variance or source
+freshness. The detail cell lets you choose a contract to inspect minute by minute.
+
+Install the optional notebook dependencies into the existing collector environment:
+
+```powershell
+uv pip install --python .\.venv-collector\Scripts\python.exe --only-binary=:all: -r .\Tastyware_Demo_Scripts\requirements-notebook.in
+```
+
+Select the standard-Python `.venv-collector` kernel in VS Code. To save executed
+results without committing private data, first save/copy the notebook under
+`Tastyware_Demo_Scripts\exports\notebooks\` (Git-ignored). Keep the source notebook
+with outputs cleared. Do not install these dependencies in the free-threaded
+demo environment. The optional requirements include `nbclient` for headless
+notebook execution as well as `ipykernel` for VS Code.
+Run all cells in order. Each query opens and closes its own read-only connection.
 
 Use the collector environment (or another environment with DuckDB installed).
 These queries do not require API credentials:
