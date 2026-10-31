@@ -442,6 +442,31 @@ percentiles and range). Selection is an exposure proxy, not confirmed uptime.
 Counts include repeated payloads and do not establish price variance or source
 freshness. The detail cell lets you choose a contract to inspect minute by minute.
 
+Section 10.1 explores complete symmetric receipt-time windows around minute
+boundaries (default +/-5 seconds). It measures before/after support, boundary
+and window-wide gaps, bid/ask/midpoint stability, and sequence-safe backward SPY
+pairing on the same connection. Midpoint-change correlation is diagnostic,
+not a synchronization test. Editable, illustrative thresholds select quiet
+candidate windows, retain observation IDs, and show rejection reasons and
+retained/rejected distributions. This retrospective screen uses after-boundary
+data, excludes the session-close boundary, and does not certify BSM suitability
+or candle alignment.
+
+Section 11 documents the preliminary BSM handoff limitations and compromises:
+unknown source synchronization, explicit receipt-time pairing, retrospective
+selection bias, unverified broker conventions, and downstream model/input
+decisions. It outlines a portable research-fixture contract without claiming
+strict collector acceptance or numerical validation.
+
+The Section 11.4 version-1 fixture exports all examined boundary windows with
+`exploratory_candidate`, rejection reasons, paired quote fields/IDs, contract
+references and timing/stability diagnostics. Its Parquet and JSON manifest
+live under `exports\validation\`; the shared source DuckDB remains required for
+raw payloads, analytics, candles and revision history. The manifest embeds
+limitations, settings, counts, column types and file/database checksums.
+Writing is opt-in in the clean notebook and refuses existing output directories.
+No source tables are modified and no rate/dividend/model inputs are inferred.
+
 Install the optional notebook dependencies into the existing collector environment:
 
 ```powershell
