@@ -3,6 +3,23 @@
 Run with the standard-Python collector environment, not the free-threaded demo
 environment. See README.md for permissions, quality flags, exports and recovery.
 No orders are placed. --plan and --export do not require credentials.
+
+Reading guide:
+    main() chooses offline export, a read-only plan, or today's live collection.
+    run_collection() owns the database and records the run's final status.
+    SessionCollector coordinates subscriptions, sampling, retries and flushing.
+    collector_core supplies configuration, the exchange-calendar window, market
+    data models, the raw streamer adapter and in-memory CaptureState.
+    collector_store supplies transactional persistence and offline exports.
+
+Two kinds of data are retained: every decoded market-data update received by
+the adapter, and scheduled snapshots used for later quality checks. Receiving
+an event does not imply it is fresh, complete or suitable for model validation.
+Missing periods remain explicit; reconnecting cannot recreate a live feed gap.
+
+The database path is reused by default. Each collection adds a distinct run_id
+and retains previous runs rather than replacing their data. Same-day option
+selections can be restored from that database when the script is restarted.
 """
 
 from __future__ import annotations
@@ -48,17 +65,50 @@ T = TypeVar("T")
 
 
 def log(message: str) -> None:
+    """Print a UTC-stamped progress message immediately, without buffering.
+
+    Callers must supply safe summaries, not credentials or API response bodies.
+    """
     print(f"{utc_now().isoformat()} {message}", flush=True)
 
 
 def leaves(error: BaseException) -> list[BaseException]:
+    """Flatten nested task exception groups into their original leaf errors.
+
+    Async task groups can wrap one failure or several concurrent failures.
+    Inspecting the leaves lets recovery distinguish retryable network failures
+    from storage-limit failures and unexpected errors that must propagate.
+    """
     if isinstance(error, BaseExceptionGroup):
         return [leaf for child in error.exceptions for leaf in leaves(child)]
     return [error]
 
 
 class SessionCollector:
+    """Coordinate one run's market-data capture within a fixed session window.
+
+    The caller supplies config, window and an already-started CollectorStore;
+    this object uses the store but does not close it. It creates CaptureState
+    for incoming observations and keeps a cumulative option universe keyed by
+    streamer symbol. SPY is subscribed separately from that option dictionary.
+
+    collect() runs connection management and periodic persistence concurrently
+    on one asyncio event loop. The streamer's state.receive callback buffers
+    observations; flush() persists those buffers, while record_due_samples()
+    asks the store to build scheduled, quality-flagged snapshots.
+
+    Reconnecting replaces the authenticated session and streamer, not the
+    collector or store. The retained universe and sample schedule survive;
+    connection-local quote caches are cleared to avoid using stale feed state.
+    """
+
     def __init__(self, config: CollectorConfig, window: SessionWindow, store: CollectorStore):
+        """Retain collaborators and initialize timers without opening a feed.
+
+        The first sample is one sample interval after the session open, even
+        when starting late. Earlier due cycles can therefore be recorded as
+        missed rather than silently moving the schedule to the current time.
+        """
         self.config, self.window, self.store = config, window, store
         self.state = CaptureState(config)
         self.instruments: dict[str, Instrument] = {}
@@ -71,10 +121,18 @@ class SessionCollector:
         self.persisted_updates = 0
 
     def verbose_log(self, message: str) -> None:
+        """Emit an optional safe progress message when verbose mode is enabled."""
         if self.config.verbose:
             log(f"[verbose] {message}")
 
     def report_feed(self, now: datetime) -> None:
+        """Describe feed activity without equating receipt with usable data.
+
+        Report cumulative counts, increments since the previous report, receipt
+        age, cached quote timestamp availability and persistence progress.
+        ``now`` is the UTC wall time used to calculate the last-event age.
+        Verbose mode is required; this method does not write database records.
+        """
         if not self.config.verbose:
             return
         kinds = ("Quote", "Trade", "Greeks", "Candle")
@@ -95,6 +153,12 @@ class SessionCollector:
         self.reported_counts = counts
 
     def flush(self) -> None:
+        """Commit pending observations and diagnostics through CollectorStore.
+
+        The store clears buffers after its transaction succeeds. Only then is
+        the collector's persisted-update counter advanced. Storage errors
+        propagate to the run lifecycle handler rather than being hidden.
+        """
         updates, diagnostics = len(self.state.updates), len(self.state.diagnostics)
         candles = sum(update.observation.kind == "Candle" for update in self.state.updates)
         self.store.flush(self.state)
@@ -109,6 +173,17 @@ class SessionCollector:
     async def request(
         self, operation: str, symbols: list[str], action: Callable[[], Awaitable[T]],
     ) -> T:
+        """Run and audit one bounded REST call or subscription operation.
+
+        ``action`` is a zero-argument async callable; its result is returned
+        unchanged. The timeout is the smaller of the configured request budget
+        and time remaining until the session's reconciliation deadline.
+
+        Record operation/symbol metadata and a safe outcome in the database.
+        Ordinary exceptions are classified and re-raised for recovery.
+        A successful subscription send does not prove that data was delivered
+        for every requested instrument.
+        """
         self.stage = operation
         self.verbose_log(f"Request starting: {operation}; symbols={len(symbols)}.")
         start = utc_now()
@@ -139,6 +214,14 @@ class SessionCollector:
         return result
 
     async def subscribe(self, streamer: RawMarketStreamer, symbols: list[str]) -> None:
+        """Subscribe symbol batches to live events and one-minute candles.
+
+        Request Quote and Trade for all symbols, and Greeks for options only.
+        Candles are requested from the session open, so a later subscription
+        may deliver earlier bars; receipt time still reflects actual arrival.
+        Batches contain at most 25 symbols and are briefly paced. Each send
+        passes through request() for timeout handling and audit records.
+        """
         for offset in range(0, len(symbols), 25):
             batch = symbols[offset:offset + 25]
             for event_class in (Quote, Trade, Greeks):
@@ -155,6 +238,18 @@ class SessionCollector:
             await asyncio.sleep(0.1)
 
     async def refresh_universe(self, session: Session, streamer: RawMarketStreamer) -> None:
+        """Select additional options from a fresh SPY quote and the REST chain.
+
+        Wait up to the request budget for a positive, usable midpoint. Unknown
+        source timestamps may be tolerated here only when receipt age is fresh;
+        that exception is diagnosed and does not relax stored sample quality.
+        select_universe() applies configured expiry and moneyness rules.
+
+        Previously retained options are never removed. If all proposed new
+        contracts would exceed the cumulative cap, reject that expansion as a
+        whole rather than silently truncating it. Persist selection details,
+        subscribe additions, and schedule the next refresh after completion.
+        """
         self.stage = "waiting_for_spy_quote"
         self.verbose_log("Waiting for a usable SPY quote to select options.")
         deadline = monotonic() + self.config.request_timeout
@@ -201,6 +296,13 @@ class SessionCollector:
         log(f"Universe: {len(self.instruments)} options retained.")
 
     async def candle_overlap(self, streamer: RawMarketStreamer, closing: bool = False) -> None:
+        """Re-request recent candles to capture revisions and late publication.
+
+        Unsubscribe and resubscribe SPY plus retained options over a rolling
+        overlap, bounded below by the session open and anchored no later than
+        its close. ``closing`` changes the audit label for final reconciliation.
+        Returned bars are observations, not proof of provider finality.
+        """
         symbols = ["SPY", *self.instruments]
         start = max(
             self.window.opens,
@@ -210,6 +312,7 @@ class SessionCollector:
             batch = symbols[offset:offset + 25]
 
             async def resubscribe() -> None:
+                """Replace this batch's candle subscriptions at the overlap start."""
                 for symbol in batch:
                     await streamer.unsubscribe_candle(symbol, "1m")
                 await streamer.subscribe_candle(batch, "1m", start, refresh_interval=1)
@@ -219,6 +322,14 @@ class SessionCollector:
         self.next_candles = utc_now() + timedelta(seconds=self.config.candle_refresh_seconds)
 
     def record_due_samples(self, now: datetime) -> None:
+        """Record every due cycle up to ``now``, never beyond the session close.
+
+        A cycle at least one full sample interval late is recorded as missed;
+        the store does not manufacture historical option snapshots for it.
+        Other cycles use current cached observations, with lateness and
+        freshness evaluated by the store. Advance the fixed schedule for each
+        cycle and buffer a cumulative feed-count diagnostic.
+        """
         while self.next_sample <= min(now, self.window.closes):
             missed = (now - self.next_sample).total_seconds() >= self.config.sample_seconds
             self.store.sample(
@@ -230,6 +341,14 @@ class SessionCollector:
                 f"received={dict(self.state.counts)}")
 
     def restore_universe(self) -> None:
+        """Restore today's previously retained options from this same database.
+
+        Choose the newest persisted metadata for each streamer symbol across
+        runs for the session date, rebuild Instrument objects, and record the
+        restored selection under the current run. An oversized prior universe
+        raises ValueError instead of dropping contracts. This restores metadata,
+        not live quote caches or an earlier process's in-memory state.
+        """
         rows = self.store.connection.execute("""
             SELECT i.symbol, i.streamer_symbol, i.option_type, i.strike, i.expiration,
                    i.expires_at, i.stops_trading_at, i.exercise_style, i.settlement_type,
@@ -252,6 +371,19 @@ class SessionCollector:
             }, utc_now())
 
     async def connected(self, session: Session, streamer: RawMarketStreamer) -> None:
+        """Manage one established connection until bounded reconciliation ends.
+
+        Clear connection-local caches, subscribe SPY and retained options, and
+        refresh the universe while regular trading remains. The monitor loop
+        records due samples, detects inactive channels or an idle feed,
+        diagnoses clock jumps, refreshes candles/universe, and checkpoints.
+        Monotonic time drives elapsed-time checks; UTC anchors market schedules.
+
+        Sampling stops at the close. After the publication grace, request one
+        final candle overlap and continue receiving until the reconciliation
+        deadline. Connection failures propagate to collect_connections() for
+        retry; a normal exit flushes pending updates.
+        """
         self.state.reset_connection()
         await self.subscribe(streamer, ["SPY", *self.instruments])
         if utc_now() < self.window.closes:
@@ -297,6 +429,14 @@ class SessionCollector:
         self.flush()
 
     async def collect(self) -> None:
+        """Run collection and periodic flushing together, then flush on exit.
+
+        TaskGroup ties their lifetimes together: a writer failure cancels
+        connection work, and completion of connection work cancels the writer.
+        A single grouped failure is unwrapped for the caller; multiple failures
+        stay grouped. The final flush is attempted on success, error or
+        cancellation, and persistence failures are allowed to propagate.
+        """
         try:
             async with asyncio.TaskGroup() as group:
                 writer = group.create_task(self.persist_updates())
@@ -313,11 +453,33 @@ class SessionCollector:
             self.flush()
 
     async def persist_updates(self) -> None:
+        """Flush buffers every configured interval until cancelled or failed.
+
+        This coroutine shares the event loop with reception and collection;
+        it is not a separate database thread. collect() owns its lifetime.
+        """
         while True:
             await asyncio.sleep(self.config.flush_seconds)
             self.flush()
 
     async def collect_connections(self) -> None:
+        """Open authenticated feed connections and recover within fixed limits.
+
+        Persist SPY metadata, restore today's option universe and load runtime
+        credentials. Each attempt creates a Session and RawMarketStreamer,
+        wiring observations directly into state.receive. Context entry/exit
+        stays in this task to respect the SDK's AnyIO cancellation scopes.
+
+        Connection setup and teardown are time-bounded; connected() controls
+        the active session duration. Retry only when all leaf errors belong to
+        the supported retryable categories. Before retrying, diagnose the gap,
+        flush received data, clear connection-local caches and back off.
+        Storage limits and unexpected errors propagate without retry.
+
+        The retry budget is cumulative for this call, and no retry may roll
+        collection into a new trading day. Exhaustion or deadline expiry raises
+        DemoHelperError; already committed observations remain in the database.
+        """
         self.store.universe([Instrument("SPY", "SPY", reference={
             "symbol": "SPY", "source": "configured underlying",
             "currency_adjustments": "unverified",
@@ -375,6 +537,18 @@ class SessionCollector:
 
 
 async def run_collection(config: CollectorConfig, window: SessionWindow) -> int:
+    """Own persistence and final run status for one scheduled collection.
+
+    Open CollectorStore at config.database and start a uniquely identified run
+    without discarding earlier runs. Record the Git revision when available.
+    Before the open, wait in bounded sleeps while checking storage usage; if
+    the session is missed while waiting, finish as partial without connecting.
+
+    After collection, derive completed/partial status from recorded coverage.
+    Return 0 for completed or 2 for partial coverage/storage limits. Cancellation
+    marks a started run interrupted; other exceptions mark it failed and
+    propagate to main(). The store is closed in all paths after it is opened.
+    """
     store = CollectorStore(config)
     started = False
     try:
@@ -424,6 +598,16 @@ async def run_collection(config: CollectorConfig, window: SessionWindow) -> int:
 
 
 def parse_arguments(argv: list[str] | None = None) -> tuple[argparse.Namespace, CollectorConfig]:
+    """Parse CLI options and return both mode flags and validated configuration.
+
+    ``argv=None`` reads process arguments; a supplied list supports tests and
+    programmatic invocation. Convert decimal gigabytes to bytes, comma-separated
+    selections to tuples, and the database path to an absolute path.
+
+    Mode flags such as --plan and --export remain in the Namespace; collection
+    settings populate CollectorConfig. Invalid input is reported through
+    argparse with SystemExit. Parsing does not authenticate or open a database.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     defaults = CollectorConfig()
     parser.add_argument("--database", type=Path, default=defaults.database)
@@ -470,6 +654,19 @@ def parse_arguments(argv: list[str] | None = None) -> tuple[argparse.Namespace, 
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Dispatch offline modes or today's collection and return a CLI exit code.
+
+    Export takes precedence over planning and does not authenticate. Planning
+    prints today's exchange-calendar window and configuration without writes.
+    Normal collection exits without authentication on non-session days or
+    after the close; there is no automatic rollover to tomorrow.
+
+    Suppress SDK debug logging because authentication frames can contain
+    secrets. Report runtime failures using safe exception type names, not API
+    bodies. Return 0 for success/no remaining session, 1 for a runtime failure
+    or the permission-check branch, 2 for partial/storage-limited collection,
+    and 130 for Ctrl+C. Argument parsing may raise SystemExit separately.
+    """
     args, config = parse_arguments(argv)
     # SDK debug logging includes authentication frames; never enable it here.
     logging.getLogger("tastytrade").setLevel(logging.CRITICAL)
