@@ -20,6 +20,21 @@ Missing periods remain explicit; reconnecting cannot recreate a live feed gap.
 The database path is reused by default. Each collection adds a distinct run_id
 and retains previous runs rather than replacing their data. Same-day option
 selections can be restored from that database when the script is restarted.
+
+To Run:
+
+Specify the virtual environment to use for the collector, then run the script with the desired flags.
+.\.venv-collector\Scripts\python.exe .\Tastyware_Demo_Scripts\13_collect_spy_validation.py --verbose    
+
+Other Run Options:
+
+For example, to run without verbose output:
+.\.venv-collector\Scripts\python.exe .\Tastyware_Demo_Scripts\13_collect_spy_validation.py
+
+For example, to run with a specific plan:
+.\.venv-collector\Scripts\python.exe .\Tastyware_Demo_Scripts\13_collect_spy_validation.py --plan
+
+
 """
 
 from __future__ import annotations
