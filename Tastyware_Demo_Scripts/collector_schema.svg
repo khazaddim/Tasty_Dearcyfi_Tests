@@ -1,0 +1,284 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="3600" height="4100" viewBox="0 0 3600 4100" role="img" aria-labelledby="title description">
+<title id="title">Collector DuckDB schema version 2</title>
+<desc id="description">All 14 collector tables, 3 views and their column types. Solid arrows denote logical references, dashed arrows denote view dependencies. No foreign key constraints are declared. Shared provenance columns are shown in the COMMON panel.</desc>
+<defs><marker id="join" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="12" markerHeight="12" orient="auto-start-reverse"><path d="M 1 1 L 10 6 L 1 11" fill="none" stroke="#60a5fa" stroke-width="1.5"/></marker><marker id="derived" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="12" markerHeight="12" orient="auto-start-reverse"><path d="M 1 1 L 10 6 L 1 11" fill="none" stroke="#c084fc" stroke-width="1.5"/></marker></defs><rect width="3600" height="4100" fill="#000000"/>
+<text x="60" y="35" font-family="Arial,Helvetica,sans-serif" font-size="44" fill="#f8fafc" dominant-baseline="text-before-edge"><tspan x="60" dy="0">Collector DuckDB schema | version 2</tspan></text>
+<text x="60" y="100" font-family="Arial,Helvetica,sans-serif" font-size="25" fill="#cbd5e1" dominant-baseline="text-before-edge"><tspan x="60" dy="0">14 tables / 3 views  |  All stored fields shown; repeated COMMON columns are factored out.</tspan></text>
+<rect x="60" y="200" width="720" height="404" fill="#111827" stroke="#cbd5e1" stroke-width="2"/>
+<rect x="60" y="200" width="720" height="64" fill="#1e293b" stroke="#cbd5e1" stroke-width="2"/>
+<text x="80" y="215" font-family="Arial,Helvetica,sans-serif" font-size="27" fill="#cbd5e1" dominant-baseline="text-before-edge"><tspan x="80" dy="0">Shared columns | COMMON</tspan></text>
+<text x="78" y="280" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   schema_version  INTEGER</tspan></text>
+<text x="78" y="309" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   run_id  VARCHAR</tspan></text>
+<text x="78" y="338" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">PK record_id  VARCHAR</tspan></text>
+<text x="78" y="367" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   source  VARCHAR</tspan></text>
+<text x="78" y="396" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   received_at_utc  TIMESTAMPTZ</tspan></text>
+<text x="78" y="425" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   raw_record_id  VARCHAR</tspan></text>
+<text x="80" y="478" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#cbd5e1" dominant-baseline="text-before-edge"><tspan x="80" dy="0">Applied to all 12 tables marked + COMMON.</tspan><tspan x="80" dy="25">record_id is the declared primary key.</tspan><tspan x="80" dy="25">run_id -&gt; runs.run_id (logical ownership).</tspan><tspan x="80" dy="25">raw_record_id -&gt; raw_records.record_id when set.</tspan></text>
+<rect x="930" y="200" width="720" height="526" fill="#111827" stroke="#fbbf24" stroke-width="2"/>
+<rect x="930" y="200" width="720" height="64" fill="#30220d" stroke="#fbbf24" stroke-width="2"/>
+<text x="950" y="215" font-family="Arial,Helvetica,sans-serif" font-size="27" fill="#fbbf24" dominant-baseline="text-before-edge"><tspan x="950" dy="0">runs</tspan></text>
+<text x="948" y="280" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">PK run_id  VARCHAR</tspan></text>
+<text x="948" y="309" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   schema_version  INTEGER</tspan></text>
+<text x="948" y="338" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   session_date  DATE</tspan></text>
+<text x="948" y="367" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   session_open  TIMESTAMPTZ</tspan></text>
+<text x="948" y="396" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   session_close  TIMESTAMPTZ</tspan></text>
+<text x="948" y="425" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   started_at  TIMESTAMPTZ</tspan></text>
+<text x="948" y="454" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   ended_at  TIMESTAMPTZ</tspan></text>
+<text x="948" y="483" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   status  VARCHAR</tspan></text>
+<text x="948" y="512" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   stop_reason  VARCHAR</tspan></text>
+<text x="948" y="541" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   config  JSON</tspan></text>
+<text x="948" y="570" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   capabilities  JSON</tspan></text>
+<text x="948" y="599" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   code_revision  VARCHAR</tspan></text>
+<text x="950" y="652" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#cbd5e1" dominant-baseline="text-before-edge"><tspan x="950" dy="0">One row per collection run.</tspan><tspan x="950" dy="25">Config, provenance and capability manifest.</tspan></text>
+<rect x="1900" y="200" width="650" height="326" fill="#111827" stroke="#5eead4" stroke-width="2"/>
+<rect x="1900" y="200" width="650" height="64" fill="#0d2927" stroke="#5eead4" stroke-width="2"/>
+<text x="1920" y="215" font-family="Arial,Helvetica,sans-serif" font-size="27" fill="#5eead4" dominant-baseline="text-before-edge"><tspan x="1920" dy="0">raw_records</tspan></text>
+<text x="1920" y="273" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#94a3b8" dominant-baseline="text-before-edge"><tspan x="1920" dy="0">+ COMMON columns (see shared panel)</tspan></text>
+<text x="1918" y="318" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   kind  VARCHAR</tspan></text>
+<text x="1918" y="347" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   payload  JSON</tspan></text>
+<text x="1920" y="400" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#cbd5e1" dominant-baseline="text-before-edge"><tspan x="1920" dy="0">Content-addressed, deduplicated JSON.</tspan><tspan x="1920" dy="25">record_id = SHA-256(kind + payload JSON).</tspan><tspan x="1920" dy="25">May be reused across multiple runs.</tspan><tspan x="1920" dy="25">raw_record_id = its own record_id.</tspan></text>
+<rect x="2800" y="200" width="700" height="262" fill="#111827" stroke="#d8b4fe" stroke-width="2"/>
+<rect x="2800" y="200" width="700" height="64" fill="#291c3b" stroke="#d8b4fe" stroke-width="2"/>
+<text x="2820" y="215" font-family="Arial,Helvetica,sans-serif" font-size="27" fill="#d8b4fe" dominant-baseline="text-before-edge"><tspan x="2820" dy="0">raw_update_payloads | VIEW</tspan></text>
+<text x="2818" y="280" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="2818" dy="0">raw_updates.*</tspan></text>
+<text x="2818" y="309" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="2818" dy="0">payload  JSON</tspan></text>
+<text x="2820" y="362" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#cbd5e1" dominant-baseline="text-before-edge"><tspan x="2820" dy="0">VIEW | inner join on raw_record_id</tspan><tspan x="2820" dy="25">raw_updates.raw_record_id</tspan><tspan x="2820" dy="25">  = raw_records.record_id</tspan></text>
+<rect x="60" y="940" width="720" height="480" fill="#111827" stroke="#93c5fd" stroke-width="2"/>
+<rect x="60" y="940" width="720" height="64" fill="#14243b" stroke="#93c5fd" stroke-width="2"/>
+<text x="80" y="955" font-family="Arial,Helvetica,sans-serif" font-size="27" fill="#93c5fd" dominant-baseline="text-before-edge"><tspan x="80" dy="0">quotes</tspan></text>
+<text x="80" y="1013" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#94a3b8" dominant-baseline="text-before-edge"><tspan x="80" dy="0">+ COMMON columns (see shared panel)</tspan></text>
+<text x="78" y="1058" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   symbol  VARCHAR</tspan></text>
+<text x="78" y="1087" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   source_time  TIMESTAMPTZ</tspan></text>
+<text x="78" y="1116" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   bid_time  TIMESTAMPTZ</tspan></text>
+<text x="78" y="1145" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   ask_time  TIMESTAMPTZ</tspan></text>
+<text x="78" y="1174" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   bid  DOUBLE</tspan></text>
+<text x="78" y="1203" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   ask  DOUBLE</tspan></text>
+<text x="78" y="1232" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   bid_size  DOUBLE</tspan></text>
+<text x="78" y="1261" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   ask_size  DOUBLE</tspan></text>
+<text x="78" y="1290" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   bid_exchange  VARCHAR</tspan></text>
+<text x="78" y="1319" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   ask_exchange  VARCHAR</tspan></text>
+<text x="80" y="1372" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#cbd5e1" dominant-baseline="text-before-edge"><tspan x="80" dy="0">Includes option and SPY quotes.</tspan></text>
+<rect x="930" y="940" width="720" height="822" fill="#111827" stroke="#7dd3fc" stroke-width="2"/>
+<rect x="930" y="940" width="720" height="64" fill="#102b3b" stroke="#7dd3fc" stroke-width="2"/>
+<text x="950" y="955" font-family="Arial,Helvetica,sans-serif" font-size="27" fill="#7dd3fc" dominant-baseline="text-before-edge"><tspan x="950" dy="0">samples</tspan></text>
+<text x="950" y="1013" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#94a3b8" dominant-baseline="text-before-edge"><tspan x="950" dy="0">+ COMMON columns (see shared panel)</tspan></text>
+<text x="948" y="1058" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   cycle_id  VARCHAR</tspan></text>
+<text x="948" y="1087" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   symbol  VARCHAR</tspan></text>
+<text x="948" y="1116" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   scheduled_at  TIMESTAMPTZ</tspan></text>
+<text x="948" y="1145" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   sampled_at  TIMESTAMPTZ</tspan></text>
+<text x="948" y="1174" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   quote_id  VARCHAR</tspan></text>
+<text x="948" y="1203" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   underlying_quote_id  VARCHAR</tspan></text>
+<text x="948" y="1232" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   analytics_id  VARCHAR</tspan></text>
+<text x="948" y="1261" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   trade_id  VARCHAR</tspan></text>
+<text x="948" y="1290" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   underlying_trade_id  VARCHAR</tspan></text>
+<text x="948" y="1319" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   option_mid  DOUBLE</tspan></text>
+<text x="948" y="1348" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   underlying_mid  DOUBLE</tspan></text>
+<text x="948" y="1377" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   quote_age_seconds  DOUBLE</tspan></text>
+<text x="948" y="1406" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   underlying_age_seconds  DOUBLE</tspan></text>
+<text x="948" y="1435" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   analytics_age_seconds  DOUBLE</tspan></text>
+<text x="948" y="1464" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   source_skew_seconds  DOUBLE</tspan></text>
+<text x="948" y="1493" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   receipt_skew_seconds  DOUBLE</tspan></text>
+<text x="948" y="1522" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   quote_eligible  BOOLEAN</tspan></text>
+<text x="948" y="1551" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   analytics_fresh  BOOLEAN</tspan></text>
+<text x="948" y="1580" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   broker_comparison_ready  BOOLEAN</tspan></text>
+<text x="948" y="1609" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   quality  JSON</tspan></text>
+<text x="950" y="1662" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#cbd5e1" dominant-baseline="text-before-edge"><tspan x="950" dy="0">One option snapshot per sampled cycle.</tspan><tspan x="950" dy="25">Observation links may be NULL.</tspan><tspan x="950" dy="25">raw_record_id uses the option quote payload.</tspan></text>
+<rect x="1900" y="940" width="650" height="480" fill="#111827" stroke="#93c5fd" stroke-width="2"/>
+<rect x="1900" y="940" width="650" height="64" fill="#14243b" stroke="#93c5fd" stroke-width="2"/>
+<text x="1920" y="955" font-family="Arial,Helvetica,sans-serif" font-size="27" fill="#93c5fd" dominant-baseline="text-before-edge"><tspan x="1920" dy="0">analytics</tspan></text>
+<text x="1920" y="1013" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#94a3b8" dominant-baseline="text-before-edge"><tspan x="1920" dy="0">+ COMMON columns (see shared panel)</tspan></text>
+<text x="1918" y="1058" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   symbol  VARCHAR</tspan></text>
+<text x="1918" y="1087" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   source_time  TIMESTAMPTZ</tspan></text>
+<text x="1918" y="1116" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   price  DOUBLE</tspan></text>
+<text x="1918" y="1145" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   volatility  DOUBLE</tspan></text>
+<text x="1918" y="1174" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   delta  DOUBLE</tspan></text>
+<text x="1918" y="1203" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   gamma  DOUBLE</tspan></text>
+<text x="1918" y="1232" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   theta  DOUBLE</tspan></text>
+<text x="1918" y="1261" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   vega  DOUBLE</tspan></text>
+<text x="1918" y="1290" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   rho  DOUBLE</tspan></text>
+<text x="1918" y="1319" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   event_flags  BIGINT</tspan></text>
+<text x="1920" y="1372" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#cbd5e1" dominant-baseline="text-before-edge"><tspan x="1920" dy="0">Broker Greeks; not a model approval.</tspan></text>
+<rect x="2800" y="940" width="700" height="445" fill="#111827" stroke="#5eead4" stroke-width="2"/>
+<rect x="2800" y="940" width="700" height="64" fill="#0d2927" stroke="#5eead4" stroke-width="2"/>
+<text x="2820" y="955" font-family="Arial,Helvetica,sans-serif" font-size="27" fill="#5eead4" dominant-baseline="text-before-edge"><tspan x="2820" dy="0">raw_updates</tspan></text>
+<text x="2820" y="1013" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#94a3b8" dominant-baseline="text-before-edge"><tspan x="2820" dy="0">+ COMMON columns (see shared panel)</tspan></text>
+<text x="2818" y="1058" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="2818" dy="0">   kind  VARCHAR</tspan></text>
+<text x="2818" y="1087" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="2818" dy="0">   symbol  VARCHAR</tspan></text>
+<text x="2818" y="1116" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="2818" dy="0">   source_time  TIMESTAMPTZ</tspan></text>
+<text x="2818" y="1145" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="2818" dy="0">   observation_id  VARCHAR</tspan></text>
+<text x="2818" y="1174" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="2818" dy="0">   receive_sequence  BIGINT</tspan></text>
+<text x="2818" y="1203" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="2818" dy="0">   received_monotonic_ns  BIGINT</tspan></text>
+<text x="2818" y="1232" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="2818" dy="0">   connection_id  VARCHAR</tspan></text>
+<text x="2820" y="1285" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#cbd5e1" dominant-baseline="text-before-edge"><tspan x="2820" dy="0">One row per received update.</tspan><tspan x="2820" dy="25">Repeats retained; sequence is per run.</tspan><tspan x="2820" dy="25">observation_id dispatches by kind (below).</tspan></text>
+<rect x="60" y="1940" width="720" height="393" fill="#111827" stroke="#93c5fd" stroke-width="2"/>
+<rect x="60" y="1940" width="720" height="64" fill="#14243b" stroke="#93c5fd" stroke-width="2"/>
+<text x="80" y="1955" font-family="Arial,Helvetica,sans-serif" font-size="27" fill="#93c5fd" dominant-baseline="text-before-edge"><tspan x="80" dy="0">trades</tspan></text>
+<text x="80" y="2013" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#94a3b8" dominant-baseline="text-before-edge"><tspan x="80" dy="0">+ COMMON columns (see shared panel)</tspan></text>
+<text x="78" y="2058" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   symbol  VARCHAR</tspan></text>
+<text x="78" y="2087" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   source_time  TIMESTAMPTZ</tspan></text>
+<text x="78" y="2116" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   price  DOUBLE</tspan></text>
+<text x="78" y="2145" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   size  DOUBLE</tspan></text>
+<text x="78" y="2174" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   day_volume  DOUBLE</tspan></text>
+<text x="78" y="2203" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   exchange  VARCHAR</tspan></text>
+<text x="78" y="2232" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   extended_hours  BOOLEAN</tspan></text>
+<text x="80" y="2285" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#cbd5e1" dominant-baseline="text-before-edge"><tspan x="80" dy="0">Includes option and SPY trades.</tspan></text>
+<rect x="930" y="1940" width="720" height="335" fill="#111827" stroke="#7dd3fc" stroke-width="2"/>
+<rect x="930" y="1940" width="720" height="64" fill="#102b3b" stroke="#7dd3fc" stroke-width="2"/>
+<text x="950" y="1955" font-family="Arial,Helvetica,sans-serif" font-size="27" fill="#7dd3fc" dominant-baseline="text-before-edge"><tspan x="950" dy="0">cycles</tspan></text>
+<text x="950" y="2013" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#94a3b8" dominant-baseline="text-before-edge"><tspan x="950" dy="0">+ COMMON columns (see shared panel)</tspan></text>
+<text x="948" y="2058" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   scheduled_at  TIMESTAMPTZ</tspan></text>
+<text x="948" y="2087" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   sampled_at  TIMESTAMPTZ</tspan></text>
+<text x="948" y="2116" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   lateness_seconds  DOUBLE</tspan></text>
+<text x="948" y="2145" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   expected_options  INTEGER</tspan></text>
+<text x="948" y="2174" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   status  VARCHAR</tspan></text>
+<text x="950" y="2227" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#cbd5e1" dominant-baseline="text-before-edge"><tspan x="950" dy="0">Missed cycles have no sample rows.</tspan></text>
+<rect x="1900" y="1940" width="650" height="622" fill="#111827" stroke="#93c5fd" stroke-width="2"/>
+<rect x="1900" y="1940" width="650" height="64" fill="#14243b" stroke="#93c5fd" stroke-width="2"/>
+<text x="1920" y="1955" font-family="Arial,Helvetica,sans-serif" font-size="27" fill="#93c5fd" dominant-baseline="text-before-edge"><tspan x="1920" dy="0">candles</tspan></text>
+<text x="1920" y="2013" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#94a3b8" dominant-baseline="text-before-edge"><tspan x="1920" dy="0">+ COMMON columns (see shared panel)</tspan></text>
+<text x="1918" y="2058" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   symbol  VARCHAR</tspan></text>
+<text x="1918" y="2087" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   interval_start  TIMESTAMPTZ</tspan></text>
+<text x="1918" y="2116" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   interval_end  TIMESTAMPTZ</tspan></text>
+<text x="1918" y="2145" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   open  DOUBLE</tspan></text>
+<text x="1918" y="2174" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   high  DOUBLE</tspan></text>
+<text x="1918" y="2203" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   low  DOUBLE</tspan></text>
+<text x="1918" y="2232" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   close  DOUBLE</tspan></text>
+<text x="1918" y="2261" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   volume  DOUBLE</tspan></text>
+<text x="1918" y="2290" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   count  DOUBLE</tspan></text>
+<text x="1918" y="2319" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   vwap  DOUBLE</tspan></text>
+<text x="1918" y="2348" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   event_flags  BIGINT</tspan></text>
+<text x="1918" y="2377" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   revision_id  VARCHAR</tspan></text>
+<text x="1918" y="2406" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   elapsed_with_grace  BOOLEAN</tspan></text>
+<text x="1918" y="2435" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   quality  JSON</tspan></text>
+<text x="1920" y="2488" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#cbd5e1" dominant-baseline="text-before-edge"><tspan x="1920" dy="0">All received one-minute revisions.</tspan><tspan x="1920" dy="25">revision_id = raw_record_id (payload hash).</tspan></text>
+<rect x="2800" y="1940" width="700" height="285" fill="#111827" stroke="#d8b4fe" stroke-width="2"/>
+<rect x="2800" y="1940" width="700" height="64" fill="#291c3b" stroke="#d8b4fe" stroke-width="2"/>
+<text x="2820" y="1955" font-family="Arial,Helvetica,sans-serif" font-size="27" fill="#d8b4fe" dominant-baseline="text-before-edge"><tspan x="2820" dy="0">latest_candles | VIEW</tspan></text>
+<text x="2818" y="2020" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="2818" dy="0">candles.*</tspan></text>
+<text x="2820" y="2073" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#cbd5e1" dominant-baseline="text-before-edge"><tspan x="2820" dy="0">VIEW | one row per</tspan><tspan x="2820" dy="25">(run_id, symbol, interval_start)</tspan><tspan x="2820" dy="25">Latest received_at_utc DESC;</tspan><tspan x="2820" dy="25">record_id DESC breaks receipt-time ties.</tspan><tspan x="2820" dy="25">No guarantee of provider finality.</tspan></text>
+<rect x="60" y="2630" width="720" height="590" fill="#111827" stroke="#bef264" stroke-width="2"/>
+<rect x="60" y="2630" width="720" height="64" fill="#223016" stroke="#bef264" stroke-width="2"/>
+<text x="80" y="2645" font-family="Arial,Helvetica,sans-serif" font-size="27" fill="#bef264" dominant-baseline="text-before-edge"><tspan x="80" dy="0">instruments</tspan></text>
+<text x="80" y="2703" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#94a3b8" dominant-baseline="text-before-edge"><tspan x="80" dy="0">+ COMMON columns (see shared panel)</tspan></text>
+<text x="78" y="2748" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   symbol  VARCHAR</tspan></text>
+<text x="78" y="2777" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   streamer_symbol  VARCHAR</tspan></text>
+<text x="78" y="2806" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   option_type  VARCHAR</tspan></text>
+<text x="78" y="2835" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   strike  DOUBLE</tspan></text>
+<text x="78" y="2864" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   expiration  DATE</tspan></text>
+<text x="78" y="2893" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   expires_at  TIMESTAMPTZ</tspan></text>
+<text x="78" y="2922" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   stops_trading_at  TIMESTAMPTZ</tspan></text>
+<text x="78" y="2951" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   exercise_style  VARCHAR</tspan></text>
+<text x="78" y="2980" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   settlement_type  VARCHAR</tspan></text>
+<text x="78" y="3009" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   shares_per_contract  INTEGER</tspan></text>
+<text x="78" y="3038" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   effective_at  TIMESTAMPTZ</tspan></text>
+<text x="78" y="3067" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   terms_status  VARCHAR</tspan></text>
+<text x="80" y="3120" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#cbd5e1" dominant-baseline="text-before-edge"><tspan x="80" dy="0">Reference versions, not a symbol primary key.</tspan><tspan x="80" dy="25">Match run_id + streamer_symbol, considering</tspan><tspan x="80" dy="25">effective_at when selecting contract terms.</tspan></text>
+<rect x="930" y="2630" width="720" height="303" fill="#111827" stroke="#bef264" stroke-width="2"/>
+<rect x="930" y="2630" width="720" height="64" fill="#223016" stroke="#bef264" stroke-width="2"/>
+<text x="950" y="2645" font-family="Arial,Helvetica,sans-serif" font-size="27" fill="#bef264" dominant-baseline="text-before-edge"><tspan x="950" dy="0">universe_revisions</tspan></text>
+<text x="950" y="2703" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#94a3b8" dominant-baseline="text-before-edge"><tspan x="950" dy="0">+ COMMON columns (see shared panel)</tspan></text>
+<text x="948" y="2748" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   effective_at  TIMESTAMPTZ</tspan></text>
+<text x="948" y="2777" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   selection  JSON</tspan></text>
+<text x="948" y="2806" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   symbols  JSON</tspan></text>
+<text x="950" y="2859" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#cbd5e1" dominant-baseline="text-before-edge"><tspan x="950" dy="0">Effective selection history.</tspan><tspan x="950" dy="25">symbols JSON lists streamer symbols.</tspan></text>
+<rect x="1900" y="2630" width="650" height="390" fill="#111827" stroke="#fbbf24" stroke-width="2"/>
+<rect x="1900" y="2630" width="650" height="64" fill="#30220d" stroke="#fbbf24" stroke-width="2"/>
+<text x="1920" y="2645" font-family="Arial,Helvetica,sans-serif" font-size="27" fill="#fbbf24" dominant-baseline="text-before-edge"><tspan x="1920" dy="0">requests</tspan></text>
+<text x="1920" y="2703" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#94a3b8" dominant-baseline="text-before-edge"><tspan x="1920" dy="0">+ COMMON columns (see shared panel)</tspan></text>
+<text x="1918" y="2748" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   operation  VARCHAR</tspan></text>
+<text x="1918" y="2777" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   started_at  TIMESTAMPTZ</tspan></text>
+<text x="1918" y="2806" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   ended_at  TIMESTAMPTZ</tspan></text>
+<text x="1918" y="2835" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   status  VARCHAR</tspan></text>
+<text x="1918" y="2864" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   symbols  JSON</tspan></text>
+<text x="1918" y="2893" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="1918" dy="0">   details  JSON</tspan></text>
+<text x="1920" y="2946" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#cbd5e1" dominant-baseline="text-before-edge"><tspan x="1920" dy="0">Request attempts and outcomes.</tspan><tspan x="1920" dy="25">raw_record_id is NULL.</tspan></text>
+<rect x="2800" y="2630" width="700" height="303" fill="#111827" stroke="#fbbf24" stroke-width="2"/>
+<rect x="2800" y="2630" width="700" height="64" fill="#30220d" stroke="#fbbf24" stroke-width="2"/>
+<text x="2820" y="2645" font-family="Arial,Helvetica,sans-serif" font-size="27" fill="#fbbf24" dominant-baseline="text-before-edge"><tspan x="2820" dy="0">diagnostics</tspan></text>
+<text x="2820" y="2703" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#94a3b8" dominant-baseline="text-before-edge"><tspan x="2820" dy="0">+ COMMON columns (see shared panel)</tspan></text>
+<text x="2818" y="2748" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="2818" dy="0">   code  VARCHAR</tspan></text>
+<text x="2818" y="2777" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="2818" dy="0">   symbol  VARCHAR</tspan></text>
+<text x="2818" y="2806" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="2818" dy="0">   details  JSON</tspan></text>
+<text x="2820" y="2859" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#cbd5e1" dominant-baseline="text-before-edge"><tspan x="2820" dy="0">Gaps, failures and health counters.</tspan><tspan x="2820" dy="25">raw_record_id is NULL.</tspan></text>
+<rect x="60" y="3360" width="720" height="181" fill="#111827" stroke="#fbbf24" stroke-width="2"/>
+<rect x="60" y="3360" width="720" height="64" fill="#30220d" stroke="#fbbf24" stroke-width="2"/>
+<text x="80" y="3375" font-family="Arial,Helvetica,sans-serif" font-size="27" fill="#fbbf24" dominant-baseline="text-before-edge"><tspan x="80" dy="0">collector_schema</tspan></text>
+<text x="78" y="3440" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="78" dy="0">   version  INTEGER</tspan></text>
+<text x="80" y="3493" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#cbd5e1" dominant-baseline="text-before-edge"><tspan x="80" dy="0">Current database-level version: 2. No PK.</tspan></text>
+<rect x="930" y="3020" width="720" height="468" fill="#111827" stroke="#d8b4fe" stroke-width="2"/>
+<rect x="930" y="3020" width="720" height="64" fill="#291c3b" stroke="#d8b4fe" stroke-width="2"/>
+<text x="950" y="3035" font-family="Arial,Helvetica,sans-serif" font-size="27" fill="#d8b4fe" dominant-baseline="text-before-edge"><tspan x="950" dy="0">run_coverage | VIEW</tspan></text>
+<text x="948" y="3100" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   run_id  VARCHAR</tspan></text>
+<text x="948" y="3129" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   status  VARCHAR</tspan></text>
+<text x="948" y="3158" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   stop_reason  VARCHAR</tspan></text>
+<text x="948" y="3187" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   recorded_cycles  BIGINT</tspan></text>
+<text x="948" y="3216" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   missed_cycles  BIGINT</tspan></text>
+<text x="948" y="3245" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   option_samples  BIGINT</tspan></text>
+<text x="948" y="3274" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   eligible_quote_samples  BIGINT</tspan></text>
+<text x="948" y="3303" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   fresh_analytics_samples  BIGINT</tspan></text>
+<text x="948" y="3332" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   diagnostic_count  BIGINT</tspan></text>
+<text x="948" y="3361" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="948" dy="0">   received_updates  BIGINT</tspan></text>
+<text x="950" y="3414" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#cbd5e1" dominant-baseline="text-before-edge"><tspan x="950" dy="0">VIEW | runs + counts by run_id from:</tspan><tspan x="950" dy="25">cycles, samples, diagnostics, raw_updates.</tspan></text>
+<polyline points="1290,928 1290,738" fill="none" stroke="#60a5fa" stroke-width="3" marker-end="url(#join)"/>
+<rect x="1312" y="786" width="242.79999999999998" height="53" fill="#111827" stroke="#111827" stroke-width="2"/>
+<text x="1320" y="790" font-family="Arial,Helvetica,sans-serif" font-size="18" fill="#60a5fa" dominant-baseline="text-before-edge"><tspan x="1320" dy="0">run_id -&gt; runs.run_id</tspan><tspan x="1320" dy="22.5">all + COMMON tables</tspan></text>
+<polyline points="918,1060 792,1060" fill="none" stroke="#60a5fa" stroke-width="3" marker-end="url(#join)"/>
+<rect x="782" y="986" width="145.6" height="53" fill="#111827" stroke="#111827" stroke-width="2"/>
+<text x="790" y="990" font-family="Arial,Helvetica,sans-serif" font-size="18" fill="#60a5fa" dominant-baseline="text-before-edge"><tspan x="790" dy="0">quote_id</tspan><tspan x="790" dy="22.5">-&gt; record_id</tspan></text>
+<polyline points="918,1230 792,1230" fill="none" stroke="#60a5fa" stroke-width="3" marker-end="url(#join)"/>
+<rect x="782" y="1141" width="145.6" height="75.5" fill="#111827" stroke="#111827" stroke-width="2"/>
+<text x="790" y="1145" font-family="Arial,Helvetica,sans-serif" font-size="18" fill="#60a5fa" dominant-baseline="text-before-edge"><tspan x="790" dy="0">underlying_</tspan><tspan x="790" dy="22.5">quote_id</tspan><tspan x="790" dy="22.5">-&gt; record_id</tspan></text>
+<polyline points="1662,1110 1888,1110" fill="none" stroke="#60a5fa" stroke-width="3" marker-end="url(#join)"/>
+<rect x="1677" y="1031" width="145.6" height="53" fill="#111827" stroke="#111827" stroke-width="2"/>
+<text x="1685" y="1035" font-family="Arial,Helvetica,sans-serif" font-size="18" fill="#60a5fa" dominant-baseline="text-before-edge"><tspan x="1685" dy="0">analytics_id</tspan><tspan x="1685" dy="22.5">-&gt; record_id</tspan></text>
+<polyline points="918,1520 845,1520 845,2050 792,2050" fill="none" stroke="#60a5fa" stroke-width="3" marker-end="url(#join)"/>
+<rect x="292" y="1796" width="340" height="53" fill="#111827" stroke="#111827" stroke-width="2"/>
+<text x="300" y="1800" font-family="Arial,Helvetica,sans-serif" font-size="18" fill="#60a5fa" dominant-baseline="text-before-edge"><tspan x="300" dy="0">trade_id / underlying_trade_id</tspan><tspan x="300" dy="22.5">-&gt; trades.record_id</tspan></text>
+<polyline points="1290,1774 1290,1928" fill="none" stroke="#60a5fa" stroke-width="3" marker-end="url(#join)"/>
+<rect x="1312" y="1886" width="242.79999999999998" height="30.5" fill="#111827" stroke="#111827" stroke-width="2"/>
+<text x="1320" y="1890" font-family="Arial,Helvetica,sans-serif" font-size="18" fill="#60a5fa" dominant-baseline="text-before-edge"><tspan x="1320" dy="0">cycle_id -&gt; record_id</tspan></text>
+<polyline points="2788,365 2562,365" fill="none" stroke="#c084fc" stroke-width="3" stroke-dasharray="12 8" marker-end="url(#derived)"/>
+<rect x="2572" y="311" width="167.2" height="30.5" fill="#111827" stroke="#111827" stroke-width="2"/>
+<text x="2580" y="315" font-family="Arial,Helvetica,sans-serif" font-size="18" fill="#c084fc" dominant-baseline="text-before-edge"><tspan x="2580" dy="0">payload source</tspan></text>
+<polyline points="3150,474 3150,928" fill="none" stroke="#c084fc" stroke-width="3" stroke-dasharray="12 8" marker-end="url(#derived)"/>
+<rect x="3172" y="786" width="156.4" height="30.5" fill="#111827" stroke="#111827" stroke-width="2"/>
+<text x="3180" y="790" font-family="Arial,Helvetica,sans-serif" font-size="18" fill="#c084fc" dominant-baseline="text-before-edge"><tspan x="3180" dy="0">raw_updates.*</tspan></text>
+<polyline points="2788,2110 2562,2110" fill="none" stroke="#c084fc" stroke-width="3" stroke-dasharray="12 8" marker-end="url(#derived)"/>
+<rect x="2567" y="2046" width="167.2" height="30.5" fill="#111827" stroke="#111827" stroke-width="2"/>
+<text x="2575" y="2050" font-family="Arial,Helvetica,sans-serif" font-size="18" fill="#c084fc" dominant-baseline="text-before-edge"><tspan x="2575" dy="0">rank revisions</tspan></text>
+<rect x="2800" y="1530" width="700" height="268" fill="#111827" stroke="#cbd5e1" stroke-width="2"/>
+<rect x="2800" y="1530" width="700" height="64" fill="#1e293b" stroke="#cbd5e1" stroke-width="2"/>
+<text x="2820" y="1545" font-family="Arial,Helvetica,sans-serif" font-size="27" fill="#cbd5e1" dominant-baseline="text-before-edge"><tspan x="2820" dy="0">raw_updates.observation_id</tspan></text>
+<text x="2818" y="1610" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="2818" dy="0">Quote  -&gt; quotes.record_id</tspan></text>
+<text x="2818" y="1639" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="2818" dy="0">Trade  -&gt; trades.record_id</tspan></text>
+<text x="2818" y="1668" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="2818" dy="0">Greeks -&gt; analytics.record_id</tspan></text>
+<text x="2818" y="1697" font-family="Cascadia Code,Consolas,monospace" font-size="21" fill="#e2e8f0" dominant-baseline="text-before-edge"><tspan x="2818" dy="0">Candle -&gt; candles.record_id</tspan></text>
+<text x="2820" y="1750" font-family="Arial,Helvetica,sans-serif" font-size="20" fill="#cbd5e1" dominant-baseline="text-before-edge"><tspan x="2820" dy="0">Logical polymorphic link, not a declared FK.</tspan></text>
+<polyline points="3150,1397 3150,1518" fill="none" stroke="#60a5fa" stroke-width="3" marker-end="url(#join)"/>
+<rect x="3172" y="1471" width="221.2" height="30.5" fill="#111827" stroke="#111827" stroke-width="2"/>
+<text x="3180" y="1475" font-family="Arial,Helvetica,sans-serif" font-size="18" fill="#60a5fa" dominant-baseline="text-before-edge"><tspan x="3180" dy="0">kind selects target</tspan></text>
+<text x="1900" y="3110" font-family="Arial,Helvetica,sans-serif" font-size="30" fill="#f8fafc" dominant-baseline="text-before-edge"><tspan x="1900" dy="0">How to read this schema</tspan></text>
+<text x="1900" y="3170" font-family="Arial,Helvetica,sans-serif" font-size="23" fill="#cbd5e1" dominant-baseline="text-before-edge"><tspan x="1900" dy="0">Solid blue arrows: referencing row -&gt; referenced record (logical join).</tspan><tspan x="1900" dy="28.75">Dashed purple arrows: view -&gt; source table (dependency, not a foreign key).</tspan><tspan x="1900" dy="28.75">PK marks declared primary keys. No FOREIGN KEY constraints are declared.</tspan><tspan x="1900" dy="28.75">Other fields are nullable in the DDL; do not infer mandatory relationships.</tspan><tspan x="1900" dy="28.75">Join raw payloads by record_id, not run_id: payloads can be shared across runs.</tspan><tspan x="1900" dy="28.75">Symbol joins to instruments are logical and must account for effective versions.</tspan><tspan x="1900" dy="28.75">cycles, diagnostics and requests have NULL raw_record_id.</tspan><tspan x="1900" dy="28.75">TIMESTAMPTZ values are handled in UTC; feed numbers are unscaled.</tspan><tspan x="1900" dy="28.75">Schema 1 upgrades to 2; complete received-update history starts with schema 2.</tspan><tspan x="1900" dy="28.75">Source: collector_store.py (COMMON, TABLES and CollectorStore.__init__).</tspan></text>
+<g id="color-key" font-family="Arial,Helvetica,sans-serif" font-size="22" dominant-baseline="text-before-edge">
+<rect x="60" y="3620" width="3440" height="420" fill="#111827" stroke="#64748b" stroke-width="2"/>
+<text x="90" y="3650" font-size="30" fill="#f8fafc">Color key | outline / header fill</text>
+<rect x="100" y="3730" width="50" height="50" fill="#1e293b" stroke="#cbd5e1" stroke-width="3"/>
+<text x="175" y="3728" fill="#cbd5e1"><tspan x="175">Slate | Shared columns and relationship notes</tspan><tspan x="175" dy="27.5">#cbd5e1 / #1e293b</tspan></text>
+<rect x="1270" y="3730" width="50" height="50" fill="#30220d" stroke="#fbbf24" stroke-width="3"/>
+<text x="1345" y="3728" fill="#fbbf24"><tspan x="1345">Amber | Run, schema and operational metadata</tspan><tspan x="1345" dy="27.5">#fbbf24 / #30220d</tspan></text>
+<rect x="2440" y="3730" width="50" height="50" fill="#0d2927" stroke="#5eead4" stroke-width="3"/>
+<text x="2515" y="3728" fill="#5eead4"><tspan x="2515">Teal | Raw payloads and received updates</tspan><tspan x="2515" dy="27.5">#5eead4 / #0d2927</tspan></text>
+<rect x="100" y="3830" width="50" height="50" fill="#14243b" stroke="#93c5fd" stroke-width="3"/>
+<text x="175" y="3828" fill="#93c5fd"><tspan x="175">Blue | Normalized market observations</tspan><tspan x="175" dy="27.5">#93c5fd / #14243b</tspan></text>
+<rect x="1270" y="3830" width="50" height="50" fill="#102b3b" stroke="#7dd3fc" stroke-width="3"/>
+<text x="1345" y="3828" fill="#7dd3fc"><tspan x="1345">Sky | Sampling cycles and option snapshots</tspan><tspan x="1345" dy="27.5">#7dd3fc / #102b3b</tspan></text>
+<rect x="2440" y="3830" width="50" height="50" fill="#223016" stroke="#bef264" stroke-width="3"/>
+<text x="2515" y="3828" fill="#bef264"><tspan x="2515">Green | Instrument and universe references</tspan><tspan x="2515" dy="27.5">#bef264 / #223016</tspan></text>
+<rect x="100" y="3930" width="50" height="50" fill="#291c3b" stroke="#d8b4fe" stroke-width="3"/>
+<text x="175" y="3928" fill="#d8b4fe"><tspan x="175">Purple | Derived SQL views</tspan><tspan x="175" dy="27.5">#d8b4fe / #291c3b</tspan></text>
+<polyline points="1270,3955 1320,3955" fill="none" stroke="#60a5fa" stroke-width="3" marker-end="url(#join)"/>
+<text x="1345" y="3928" fill="#60a5fa"><tspan x="1345">Solid blue arrow | Logical reference</tspan><tspan x="1345" dy="27.5">#60a5fa | Not an enforced foreign key</tspan></text>
+<polyline points="2440,3955 2490,3955" fill="none" stroke="#c084fc" stroke-width="3" stroke-dasharray="12 8" marker-end="url(#derived)"/>
+<text x="2515" y="3928" fill="#c084fc"><tspan x="2515">Dashed purple arrow | View dependency</tspan><tspan x="2515" dy="27.5">#c084fc | Points to the source table</tspan></text>
+</g>
+</svg>

@@ -223,9 +223,7 @@ $env:TASTYTRADE_ENV = 'production'
 .\.venv-collector\Scripts\python.exe .\Tastyware_Demo_Scripts\13_collect_spy_validation.py --acknowledge-data-permissions
 ```
 
-Only acknowledge permissions after verifying that your market-data agreement
-allows retention and transfer to the validation repository. No authenticated
-full-session pilot was run as part of implementation.
+On starting the script:
 
 - Started before the open: waits for **today's** regular XNYS open.
 - Started during the session: joins now; earlier missed cycles remain explicit.
@@ -371,6 +369,13 @@ Even exit 0 does **not** approve feed semantics, broker/model agreement or
 historical replay. Health counters are printed during collection.
 
 ### Database and export contract
+
+See the [graphical schema (SVG)](./collector_schema.svg) or open the
+[editable Excalidraw diagram](./collector_schema.excalidraw). Both document
+schema 2, including all table/view columns and shared provenance fields.
+Both include a color key with category meanings and hex codes.
+Arrows distinguish logical joins from view dependencies; the database does
+not declare foreign-key constraints.
 
 | Table/view | Contents |
 |---|---|
