@@ -433,6 +433,18 @@ capabilities rather than fabricating successful validation.
 
 ### Notebook analysis after stopping the writer
 
+For a focused day-by-day starting point, use
+[15_spy_contract_explorer.ipynb](./15_spy_contract_explorer.ipynb). It documents
+broker/OCC, dxFeed and Massive SPY option symbology, connects read-only, and
+lists the union of option contracts across all runs for a selected New York
+session. Set `ANALYSIS_DAY` near the top (default `2026-10-30`, the first
+recorded day; `None` discovers the earliest session with instrument metadata).
+The complete list includes normalized quote, trade and analytics row counts,
+with explicit schema-1/schema-2 recording caveats. The current collector
+refreshes selection every 30 minutes by default, retains earlier contracts
+within a session up to its cumulative cap, and restores same-day selections
+on restart; it does not maintain one fixed contract universe across days.
+
 Start with [14_explore_spy_capture.ipynb](./14_explore_spy_capture.ipynb) for a
 read-only, step-by-step inventory of tables, collection runs, event counts,
 instruments, raw payloads, minute samples, analytics, candles and diagnostics.
