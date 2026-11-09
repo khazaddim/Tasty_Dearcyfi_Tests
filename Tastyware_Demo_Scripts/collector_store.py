@@ -105,7 +105,7 @@ class CollectorStore:
         self.connection = duckdb.connect(str(config.database))
         try:
             self.connection.execute("SET TimeZone='UTC'")
-            self.connection.execute("SET memory_limit='512MB'")
+            self.connection.execute("SET memory_limit='2GB'")  #duckdb memory limit
             self.connection.execute("SET threads=2")
             tables = {row[0] for row in self.connection.execute("SHOW TABLES").fetchall()}
             if tables and "collector_schema" not in tables:
